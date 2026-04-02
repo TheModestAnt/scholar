@@ -9,6 +9,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initData();
   if (!currentUser) return;
   renderSidebar();
+  renderAll();
+});
+
+function renderAll() {
   renderOverview();
   renderGrades();
   renderAssignments();
@@ -16,62 +20,80 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCalendar();
   renderDocuments();
   renderSettings();
-  setTimeout(() => {
-    initAttendChart();
-  }, 100);
-});
+  renderIntegrationsPage();
+  setTimeout(initAttendChart, 120);
+}
 
 /* ── SIDEBAR ── */
 function renderSidebar() {
-  const name = userData.firstName || currentUser.firstName;
-  const grade = userData.grade || currentUser.grade;
+  const name = userData.firstName || currentUser.firstName || 'Student';
+  const grade = userData.grade || currentUser.grade || '';
   document.getElementById('user-name-sidebar').textContent = name;
   document.getElementById('user-grade-sidebar').textContent = formatGrade(grade);
-  document.getElementById('user-avatar').textContent = (name[0] || 'S').toUpperCase();
+  document.getElementById('user-avatar').textContent = name[0].toUpperCase();
 }
 
 /* ── OVERVIEW ── */
 function renderOverview() {
-  const name = userData.firstName || currentUser.firstName;
+  const name = userData.firstName || currentUser.firstName || 'there';
   const hour = new Date().getHours();
   const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  document.getElementById('greeting').textContent = `${greet}, ${name} ✦`;
+  document.getElementById('greeting').textContent = `${greet}, ${name}`;
 
   const now = new Date();
   document.getElementById('today-date').textContent =
-    now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
-    ' · ' + countDueSoon() + ' assignment' + (countDueSoon() !== 1 ? 's' : '') + ' due this week';
+    now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-  document.getElementById('stat-gpa').textContent = computeGPA();
+  const gpa = computeGPA();
+  document.getElementById('stat-gpa').textContent = gpa;
   document.getElementById('stat-due').textContent = countDueSoon();
   document.getElementById('stat-streak').textContent = userData.streak || 1;
 
-  // Assignments preview
+  // Upcoming assignments
   const container = document.getElementById('overview-assignments');
   const upcoming = getAssignments()
     .filter(a => a.status !== 'submitted')
     .sort((a,b) => a.due.localeCompare(b.due))
     .slice(0, 4);
-  container.innerHTML = upcoming.map(a => assignRow(a)).join('') || '<p style="font-size:12px;color:var(--ink3);padding:8px 0">No upcoming assignments 🎉</p>';
 
-  // Schedule
-  document.getElementById('overview-schedule').innerHTML = SCHEDULE.map(e => `
-    <div class="event-item">
-      <div class="event-time">${e.time}</div>
-      <div class="event-dot" style="background:${e.color}"></div>
-      <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
-    </div>`).join('');
+  if (!upcoming.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎉</div><p>No upcoming assignments!<br>Add one in the Assignments tab.</p></div>`;
+  } else {
+    container.innerHTML = upcoming.map(a => assignRow(a)).join('');
+  }
+
+  // Schedule — show notice if Google Calendar not connected
+  const integ = getIntegrations();
+  const schedContainer = document.getElementById('overview-schedule');
+  if (!integ.googleCalendar) {
+    schedContainer.innerHTML = `
+      <div class="notice"><span class="notice-icon">📅</span>Connect Google Calendar to see your real schedule</div>
+      ${DEMO_SCHEDULE.map(e => `
+        <div class="event-item" style="opacity:.5">
+          <div class="event-time">${e.time}</div>
+          <div class="event-dot" style="background:${e.color}"></div>
+          <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
+        </div>`).join('')}
+      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Calendar →</button>`;
+  } else {
+    schedContainer.innerHTML = DEMO_SCHEDULE.map(e => `
+      <div class="event-item">
+        <div class="event-time">${e.time}</div>
+        <div class="event-dot" style="background:${e.color}"></div>
+        <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
+      </div>`).join('');
+  }
 }
 
 function assignRow(a) {
   const [badge, cls] = statusBadge(a.status);
   const due = formatDue(a.due);
-  const urgent = due === 'Today' || due === 'Tomorrow' || due === 'Past due';
-  return `<div class="assign-item" style="${a.status==='submitted'?'opacity:.55':''}">
+  const urgent = (due === 'Today' || due === 'Tomorrow' || due === 'Past due') && a.status !== 'submitted';
+  return `<div class="assign-item" style="${a.status==='submitted'?'opacity:.5':''}">
     <div class="assign-dot" style="background:${a.color}"></div>
-    <div style="flex:1"><div class="assign-title">${a.title}</div><div class="assign-class">${a.className}</div></div>
+    <div style="flex:1"><div class="assign-title">${escHtml(a.title)}</div><div class="assign-class">${escHtml(a.className)}</div></div>
     <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-      <div class="assign-due" style="${urgent&&a.status!=='submitted'?'color:var(--red)':''}">${due}</div>
+      <div class="assign-due" style="${urgent?'color:var(--red);font-weight:500':''}">${due}</div>
       <span class="badge ${cls}">${badge}</span>
     </div>
   </div>`;
@@ -80,16 +102,29 @@ function assignRow(a) {
 /* ── GRADES ── */
 function renderGrades() {
   const classes = getClasses();
-  document.getElementById('grade-bars').innerHTML = classes.map(c => {
-    const [letter, cls] = gradeLabel(c.grade);
-    return `<div class="grade-row">
-      <span class="grade-name">${c.name}</span>
-      <div class="grade-bar-wrap"><div class="grade-bar" style="width:${c.grade}%;background:${c.color}"></div></div>
-      <span class="grade-pct">${c.grade}%</span>
-      <span class="grade-letter badge ${cls}">${letter}</span>
-    </div>`;
-  }).join('');
-  document.getElementById('current-gpa').textContent = computeGPA();
+  const integ = getIntegrations();
+
+  let html = '';
+  if (!integ.googleClassroom && !classes.length) {
+    html = `<div class="notice"><span class="notice-icon">📚</span>Connect Google Classroom to import your grades automatically</div>
+      <div class="empty-state"><div class="empty-state-icon">◎</div><p>No classes yet.<br>Add classes manually in Settings, or connect Google Classroom.</p>
+      <button class="connect-btn" style="margin-top:14px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Classroom →</button></div>`;
+  } else {
+    html = classes.map(c => {
+      const [letter, cls] = gradeLabel(c.grade);
+      return `<div class="grade-row">
+        <span class="grade-name">${escHtml(c.name)}</span>
+        <div class="grade-bar-wrap"><div class="grade-bar" style="width:${c.grade}%;background:${c.color}"></div></div>
+        <span class="grade-pct">${c.grade}%</span>
+        <span class="grade-letter badge ${cls}">${letter}</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('grade-bars').innerHTML = html;
+
+  const gpa = computeGPA();
+  const gpaEl = document.getElementById('current-gpa');
+  if (gpaEl) gpaEl.textContent = gpa;
 }
 
 function initGradeChart() {
@@ -102,12 +137,13 @@ function initGradeChart() {
       labels: GRADE_TREND.months,
       datasets: GRADE_TREND.datasets.map(d => ({
         label: d.label, data: d.data, borderColor: d.color,
-        tension: .4, pointRadius: 3, fill: false, borderWidth: 2
+        tension: .4, pointRadius: 3, fill: false, borderWidth: 2,
+        pointBackgroundColor: d.color,
       }))
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 10, padding: 14, font: { size: 11, family: 'DM Sans' } } } },
+      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, padding: 14, font: { size: 11, family: 'DM Sans' }, usePointStyle: true } } },
       scales: {
         y: { min: 75, max: 100, ticks: { font: { size: 11 } }, grid: { color: 'rgba(128,128,128,.1)' } },
         x: { ticks: { font: { size: 11 } }, grid: { display: false } }
@@ -118,30 +154,45 @@ function initGradeChart() {
 
 /* ── ASSIGNMENTS ── */
 function renderAssignments() {
+  const integ = getIntegrations();
   const all = getAssignments().sort((a,b) => {
     if (a.status === 'submitted' && b.status !== 'submitted') return 1;
     if (b.status === 'submitted' && a.status !== 'submitted') return -1;
     return a.due.localeCompare(b.due);
   });
-  document.getElementById('assignment-list').innerHTML = all.map(a => `
-    <div class="assign-item" style="${a.status==='submitted'?'opacity:.55':''}">
-      <div class="assign-dot" style="background:${a.color}"></div>
-      <div style="flex:1"><div class="assign-title">${a.title}</div><div class="assign-class">${a.className}</div></div>
-      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-        <div class="assign-due">${formatDue(a.due)}</div>
-        <span class="badge ${statusBadge(a.status)[1]}">${statusBadge(a.status)[0]}</span>
-      </div>
-      <button onclick="removeAssignment(${a.id});renderAssignments();renderOverview()" style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:14px;margin-left:8px;padding:2px 4px" title="Remove">×</button>
-    </div>`).join('') || '<p style="font-size:12px;color:var(--ink3);padding:12px 0">No assignments yet. Add one above!</p>';
+
+  let html = '';
+  if (!integ.googleClassroom && !all.length) {
+    html = `<div class="notice"><span class="notice-icon">📚</span>Connect Google Classroom to sync assignments automatically</div>
+      <div class="empty-state"><div class="empty-state-icon">✦</div><p>No assignments yet.<br>Add one with the button above, or connect Google Classroom.</p></div>`;
+  } else {
+    html = all.map(a => `
+      <div class="assign-item" style="${a.status==='submitted'?'opacity:.5':''}">
+        <div class="assign-dot" style="background:${a.color}"></div>
+        <div style="flex:1"><div class="assign-title">${escHtml(a.title)}</div><div class="assign-class">${escHtml(a.className)}</div></div>
+        <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+          <div class="assign-due">${formatDue(a.due)}</div>
+          <span class="badge ${statusBadge(a.status)[1]}">${statusBadge(a.status)[0]}</span>
+        </div>
+        <button onclick="removeAssignment(${a.id});renderAssignments();renderOverview()" title="Remove"
+          style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:16px;margin-left:8px;padding:0 2px;line-height:1;transition:color .12s"
+          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--ink3)'">×</button>
+      </div>`).join('') || `<div class="empty-state"><div class="empty-state-icon">🎉</div><p>All done! No assignments remaining.</p></div>`;
+  }
+  document.getElementById('assignment-list').innerHTML = html;
 }
 
 function openAddAssignment() {
-  // Populate class dropdown
   const sel = document.getElementById('modal-class');
-  sel.innerHTML = getClasses().map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-  // Default due date to tomorrow
+  const classes = getClasses();
+  if (!classes.length) {
+    alert('Add some classes in Settings first!');
+    return;
+  }
+  sel.innerHTML = classes.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
   const d = new Date(); d.setDate(d.getDate()+1);
   document.getElementById('modal-due').value = d.toISOString().slice(0,10);
+  document.getElementById('modal-title').value = '';
   document.getElementById('modal-overlay').classList.remove('hidden');
 }
 
@@ -153,15 +204,13 @@ function saveAssignment() {
   if (!title || !due) return;
   addAssignment({ title, className, due, status });
   document.getElementById('modal-overlay').classList.add('hidden');
-  document.getElementById('modal-title').value = '';
   renderAssignments();
   renderOverview();
 }
 
 function closeModal(e) {
-  if (e.target === document.getElementById('modal-overlay')) {
+  if (e.target === document.getElementById('modal-overlay'))
     document.getElementById('modal-overlay').classList.add('hidden');
-  }
 }
 
 /* ── ATTENDANCE ── */
@@ -174,19 +223,31 @@ function renderAttendance() {
   document.getElementById('att-absent').textContent = totalAbsent;
   document.getElementById('att-rate').textContent = rate + '%';
 
-  const classAttend = [
-    { name: 'AP Physics',     pips: [1,1,1,1,1,1,1,1,1,1], rate: '100%', badge: 'badge-green' },
-    { name: 'Senior Seminar', pips: [1,1,1,1,1,1,1,1,1,1], rate: '100%', badge: 'badge-green' },
-    { name: 'AP Calculus',    pips: [1,1,1,1,0,1,1,1,1,0], rate: '80%',  badge: 'badge-amber' },
-    { name: 'World History',  pips: [1,1,1,1,1,1,1,1,1,1], rate: '100%', badge: 'badge-green' },
-    { name: 'Art Studio',     pips: [1,1,1,1,1,1,1,1,1,1], rate: '100%', badge: 'badge-green' },
-  ];
-  document.getElementById('attendance-pips').innerHTML = classAttend.map(c => `
-    <div class="attend-row">
-      <span class="attend-name">${c.name}</span>
-      <div class="attend-pips">${c.pips.map(p=>`<div class="pip" style="background:${p?'var(--green)':'var(--red)'}"></div>`).join('')}</div>
-      <span class="badge ${c.badge}" style="margin-left:12px">${c.rate}</span>
-    </div>`).join('');
+  const integ = getIntegrations();
+  const pipsContainer = document.getElementById('attendance-pips');
+
+  if (!integ.googleClassroom) {
+    pipsContainer.innerHTML = `<div class="notice" style="margin:0"><span class="notice-icon">▦</span>Connect Google Classroom to track real attendance. Showing example data below.</div>`;
+    const exampleClasses = getClasses().slice(0, 5);
+    const patterns = [[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,0,1,1,1,1,0],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1]];
+    const rates = ['100%','100%','80%','100%','100%'];
+    const badges = ['badge-green','badge-green','badge-amber','badge-green','badge-green'];
+    const names = exampleClasses.length ? exampleClasses.map(c=>c.name) : ['AP Physics','Senior Seminar','AP Calculus','World History','Art Studio'];
+    pipsContainer.innerHTML += names.map((name,i) => `
+      <div class="attend-row" style="opacity:.6">
+        <span class="attend-name">${escHtml(name)}</span>
+        <div class="attend-pips">${(patterns[i]||patterns[0]).map(p=>`<div class="pip" style="background:${p?'var(--green)':'var(--red)'}"></div>`).join('')}</div>
+        <span class="badge ${badges[i]}" style="margin-left:12px">${rates[i]}</span>
+      </div>`).join('');
+  } else {
+    const classes = getClasses();
+    pipsContainer.innerHTML = classes.map(c => `
+      <div class="attend-row">
+        <span class="attend-name">${escHtml(c.name)}</span>
+        <div class="attend-pips">${[1,1,1,1,1,1,1,1,1,1].map(p=>`<div class="pip" style="background:var(--green)"></div>`).join('')}</div>
+        <span class="badge badge-green" style="margin-left:12px">100%</span>
+      </div>`).join('');
+  }
 }
 
 function initAttendChart() {
@@ -197,13 +258,13 @@ function initAttendChart() {
     data: {
       labels: ATTENDANCE_DATA.months,
       datasets: [
-        { label: 'Present', data: ATTENDANCE_DATA.present, backgroundColor: 'rgba(45,140,94,.2)', borderColor: '#2d8c5e', borderWidth: 1.5, borderRadius: 4 },
-        { label: 'Absent',  data: ATTENDANCE_DATA.absent,  backgroundColor: 'rgba(192,57,43,.2)',  borderColor: '#c0392b', borderWidth: 1.5, borderRadius: 4 }
+        { label: 'Present', data: ATTENDANCE_DATA.present, backgroundColor: 'rgba(22,163,74,.15)', borderColor: '#16a34a', borderWidth: 1.5, borderRadius: 5 },
+        { label: 'Absent',  data: ATTENDANCE_DATA.absent,  backgroundColor: 'rgba(220,38,38,.15)', borderColor: '#dc2626', borderWidth: 1.5, borderRadius: 5 }
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 10, padding: 12, font: { size: 11 } } } },
+      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, padding: 14, font: { size: 11 }, usePointStyle: true } } },
       scales: {
         y: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(128,128,128,.1)' } },
         x: { ticks: { font: { size: 11 } }, grid: { display: false } }
@@ -216,51 +277,120 @@ function initAttendChart() {
 function renderCalendar() {
   const today = new Date();
   const monday = new Date(today);
-  monday.setDate(today.getDate() - today.getDay() + 1);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
 
-  const days = ['Mon','Tue','Wed','Thu','Fri'];
-  document.getElementById('week-view').innerHTML = days.map((d, i) => {
+  document.getElementById('week-view').innerHTML = ['Mon','Tue','Wed','Thu','Fri'].map((d, i) => {
     const date = new Date(monday); date.setDate(monday.getDate() + i);
     const isToday = date.toDateString() === today.toDateString();
-    const num = date.getDate();
     return `<div class="week-day${isToday?' today':''}">
       <div class="week-day-label">${d}</div>
-      <div class="week-day-num">${num}</div>
-      ${isToday ? '<div class="week-event" style="background:var(--accent2);color:var(--accent)">Today</div>' : ''}
+      <div class="week-day-num">${date.getDate()}</div>
+      ${isToday ? '<div class="week-event" style="background:var(--accent-soft);color:var(--accent)">Today</div>' : ''}
     </div>`;
   }).join('');
+
+  const integ = getIntegrations();
+  const eventList = document.getElementById('event-list');
 
   const upcoming = getAssignments()
     .filter(a => a.status !== 'submitted')
     .sort((a,b) => a.due.localeCompare(b.due))
-    .slice(0, 6);
+    .slice(0, 5)
+    .map(a => ({ date: formatDue(a.due), title: a.title, sub: a.className, color: a.color }));
 
-  document.getElementById('event-list').innerHTML = [
-    ...SCHEDULE.map(e => ({ time: 'Today', title: e.title, sub: `Class · ${e.sub}`, color: e.color })),
-    ...upcoming.map(a => ({ time: formatDue(a.due), title: a.title, sub: a.className, color: a.color }))
-  ].slice(0, 8).map(e => `
-    <div class="event-item">
-      <div class="event-time">${e.time}</div>
-      <div class="event-dot" style="background:${e.color}"></div>
-      <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
-    </div>`).join('');
+  if (!integ.googleCalendar && !upcoming.length) {
+    eventList.innerHTML = `
+      <div class="notice"><span class="notice-icon">📅</span>Connect Google Calendar to see all your events here</div>
+      ${DEMO_EVENTS.map(e=>`<div class="event-item" style="opacity:.45">
+        <div class="event-time">${e.date}</div>
+        <div class="event-dot" style="background:${e.color}"></div>
+        <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
+      </div>`).join('')}
+      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Calendar →</button>`;
+  } else {
+    eventList.innerHTML = (upcoming.length ? upcoming : DEMO_EVENTS).map(e => `
+      <div class="event-item">
+        <div class="event-time">${e.date}</div>
+        <div class="event-dot" style="background:${e.color}"></div>
+        <div><div class="event-title">${escHtml(e.title)}</div><div class="event-sub">${escHtml(e.sub)}</div></div>
+      </div>`).join('');
+  }
 }
 
 /* ── DOCUMENTS ── */
 function renderDocuments() {
-  document.getElementById('gdocs-list').innerHTML = GDOCS.map(d => `
-    <div class="doc-item">
-      <div class="doc-icon">${d.icon}</div>
-      <div style="flex:1"><div class="doc-title">${d.title}</div><div class="doc-meta">${d.meta}</div></div>
-      <span class="badge ${d.badgeCls}">${d.badge}</span>
-    </div>`).join('');
+  const integ = getIntegrations();
 
-  document.getElementById('notion-list').innerHTML = NOTION_DOCS.map(d => `
-    <div class="doc-item">
-      <div class="doc-icon">${d.icon}</div>
-      <div style="flex:1"><div class="doc-title">${d.title}</div><div class="doc-meta">${d.meta}</div></div>
-      <span class="tag">${d.tag}</span>
-    </div>`).join('');
+  const gdocsEl = document.getElementById('gdocs-list');
+  if (!integ.googleDocs) {
+    gdocsEl.innerHTML = `
+      <div class="notice"><span class="notice-icon">📄</span>Connect Google Docs to see your real documents here</div>
+      ${DEMO_GDOCS.map(d=>`<div class="doc-item" style="opacity:.45">
+        <div class="doc-icon">${d.icon}</div>
+        <div style="flex:1"><div class="doc-title">${d.title}</div><div class="doc-meta">${d.meta}</div></div>
+        <span class="badge ${d.badgeCls}">${d.badge}</span>
+      </div>`).join('')}
+      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Docs →</button>`;
+  } else {
+    gdocsEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📄</div><p>Google Docs connected!<br>Full API integration coming soon.</p></div>`;
+  }
+
+  const notionEl = document.getElementById('notion-list');
+  if (!integ.notion) {
+    notionEl.innerHTML = `
+      <div class="notice"><span class="notice-icon">◈</span>Connect Notion to see your pages here</div>
+      ${DEMO_NOTION.map(d=>`<div class="doc-item" style="opacity:.45">
+        <div class="doc-icon">${d.icon}</div>
+        <div style="flex:1"><div class="doc-title">${d.title}</div><div class="doc-meta">${d.meta}</div></div>
+        <span class="tag">${d.tag}</span>
+      </div>`).join('')}
+      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Notion →</button>`;
+  } else {
+    notionEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">◈</div><p>Notion connected!<br>Full API integration coming soon.</p></div>`;
+  }
+}
+
+/* ── INTEGRATIONS PAGE ── */
+function renderIntegrationsPage() {
+  const integ = getIntegrations();
+  const integrations = [
+    { key: 'googleClassroom', icon: '🏫', name: 'Google Classroom', desc: 'Sync grades, assignments & attendance', color: 'var(--accent)' },
+    { key: 'googleDocs',      icon: '📄', name: 'Google Docs',      desc: 'Access your documents & drafts', color: '#16a34a' },
+    { key: 'googleCalendar',  icon: '📅', name: 'Google Calendar',  desc: 'See your schedule & due dates', color: '#d97706' },
+    { key: 'notion',          icon: '◈',  name: 'Notion',           desc: 'Browse your notes & pages', color: '#7c3aed' },
+  ];
+
+  document.getElementById('integrations-grid').innerHTML = integrations.map(i => {
+    const connected = integ[i.key];
+    return `<div class="integration-card${connected?' connected':''}">
+      <div class="int-left">
+        <div class="int-icon">${i.icon}</div>
+        <div>
+          <div class="int-name">${i.name}</div>
+          <div class="int-status${connected?' live':''}">${connected ? '● Connected' : i.desc}</div>
+        </div>
+      </div>
+      ${connected
+        ? `<button class="btn-secondary" style="font-size:11px;padding:5px 10px;color:var(--ink3)" onclick="disconnectIntegration('${i.key}');renderAll()">Disconnect</button>`
+        : `<button class="connect-btn" onclick="handleConnect('${i.key}')">Connect →</button>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function handleConnect(key) {
+  // In production this would open an OAuth flow.
+  // For now, mark as connected so the UI reflects the state.
+  const names = {
+    googleClassroom: 'Google Classroom',
+    googleDocs: 'Google Docs',
+    googleCalendar: 'Google Calendar',
+    notion: 'Notion',
+  };
+  if (confirm(`Connect ${names[key]}?\n\n(In the full version this opens OAuth login. For now it will mark as connected so you can see how the dashboard changes.)`)) {
+    connectIntegration(key);
+    renderAll();
+  }
 }
 
 /* ── SETTINGS ── */
@@ -273,39 +403,29 @@ function renderSettings() {
 }
 
 function renderClassList() {
-  document.getElementById('class-list').innerHTML = getClasses().map(c => `
-    <div class="class-item">
-      <div class="class-dot" style="background:${c.color}"></div>
-      <span class="class-name">${c.name}</span>
-      <span style="font-size:11px;color:var(--ink3)">${c.grade}%</span>
-      <button class="class-remove" onclick="removeClassAndRender('${c.name}')">×</button>
-    </div>`).join('');
+  const classes = getClasses();
+  document.getElementById('class-list').innerHTML = classes.length
+    ? classes.map(c => `
+      <div class="class-item">
+        <div class="class-dot" style="background:${c.color}"></div>
+        <span class="class-name">${escHtml(c.name)}</span>
+        <span style="font-size:11px;color:var(--ink3)">${c.grade}%</span>
+        <button class="class-remove" onclick="removeClassItem('${c.name.replace(/'/g,"\\'")}');renderClassList();renderGrades();renderAssignments()">×</button>
+      </div>`).join('')
+    : `<p style="font-size:12px;color:var(--ink3);padding:8px 0">No classes yet. Add one below!</p>`;
 }
 
-function removeClassAndRender(name) {
-  removeClass(name);
-  renderClassList();
-  renderGrades();
-}
-
-function addClass() {
+function addClassFromSettings() {
   const name = document.getElementById('new-class-name').value.trim();
   const color = document.getElementById('new-class-color').value;
+  const gradeVal = parseInt(document.getElementById('new-class-grade').value) || 85;
   if (!name) return;
   if (getClasses().find(c => c.name === name)) return;
-  addClassFn({ name, color, grade: 85 });
+  addClassItem({ name, color, grade: gradeVal });
   document.getElementById('new-class-name').value = '';
+  document.getElementById('new-class-grade').value = '85';
   renderClassList();
   renderGrades();
-}
-
-// Alias to avoid name collision with data.js
-function addClassFn(cls) { addClass(cls); }
-// Actual call
-function addClass(cls) {
-  userData.classes = userData.classes || [];
-  userData.classes.push(cls);
-  saveUserData();
 }
 
 function saveSettings() {
@@ -327,14 +447,14 @@ function showPage(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
-  el.classList.add('active');
-  if (id === 'settings') renderSettings();
-  if (id === 'attendance') { setTimeout(initAttendChart, 80); }
+  if (el) el.classList.add('active');
+  if (id === 'attendance') setTimeout(initAttendChart, 80);
+  if (id === 'integrations') renderIntegrationsPage();
 }
 
 function setTab(el, show, hide) {
-  const parent = el.closest('.page') || document.body;
-  parent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  const tabs = el.parentElement.querySelectorAll('.tab');
+  tabs.forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.getElementById(show).classList.remove('hidden');
   document.getElementById(hide).classList.add('hidden');
@@ -344,15 +464,20 @@ function setTab(el, show, hide) {
 function quickAsk() {
   const v = document.getElementById('quick-input').value.trim();
   if (!v) return;
-  showPage('ai', document.querySelector('[data-page="ai"]'));
   document.getElementById('quick-input').value = '';
-  sendToChat(v);
+  showPage('ai', document.querySelector('[data-page="ai"]'));
+  setTimeout(() => {
+    document.getElementById('ai-input').value = v;
+    sendAI();
+  }, 50);
 }
 
 function sendToChat(msg) {
   showPage('ai', document.querySelector('[data-page="ai"]'));
-  document.getElementById('ai-input').value = msg;
-  sendAI();
+  setTimeout(() => {
+    document.getElementById('ai-input').value = msg;
+    sendAI();
+  }, 50);
 }
 
 async function sendAI() {
@@ -362,21 +487,17 @@ async function sendAI() {
   input.value = '';
 
   const messages = document.getElementById('ai-messages');
-
-  // Show user message
   messages.innerHTML += `<div class="ai-msg user">${escHtml(msg)}</div>`;
 
-  // Show thinking
   const thinkId = 'think-' + Date.now();
   messages.innerHTML += `<div class="ai-msg thinking" id="${thinkId}">Thinking…</div>`;
   messages.scrollTop = messages.scrollHeight;
 
   aiHistory.push({ role: 'user', content: msg });
 
-  // Context string
-  const classes = getClasses().map(c => `${c.name} (${c.grade}%)`).join(', ');
-  const assignments = getAssignments().filter(a=>a.status!=='submitted').map(a=>`${a.title} [${a.className}, due ${a.due}]`).join('; ');
-  const systemPrompt = `You are Scholar's built-in AI tutor for a student named ${currentUser.firstName}. Be warm, concise, and encouraging. Their classes: ${classes}. Upcoming assignments: ${assignments || 'none'}. Answer questions about school, homework, and studying. Keep responses focused and helpful. No markdown formatting.`;
+  const classes = getClasses().map(c => `${c.name} (${c.grade}%)`).join(', ') || 'none added yet';
+  const assignments = getAssignments().filter(a=>a.status!=='submitted').map(a=>`${a.title} [${a.className}, due ${a.due}]`).join('; ') || 'none';
+  const systemPrompt = `You are Scholar's AI tutor for a student named ${currentUser.firstName}. Be warm, concise, and encouraging. Their classes: ${classes}. Upcoming assignments: ${assignments}. Help with studying, homework, and school questions. Keep responses clear and focused. No markdown.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -390,17 +511,18 @@ async function sendAI() {
       })
     });
     const data = await res.json();
-    const reply = data.content?.find(b=>b.type==='text')?.text || 'Sorry, I had trouble responding. Try again!';
+    const reply = data.content?.find(b=>b.type==='text')?.text || "Sorry, I couldn't respond. Try again!";
     aiHistory.push({ role: 'assistant', content: reply });
     document.getElementById(thinkId)?.remove();
     messages.innerHTML += `<div class="ai-msg assistant">${escHtml(reply)}</div>`;
   } catch(e) {
     document.getElementById(thinkId)?.remove();
-    messages.innerHTML += `<div class="ai-msg assistant">Couldn't connect to the AI tutor right now. Make sure you're online!</div>`;
+    messages.innerHTML += `<div class="ai-msg assistant">Couldn't connect right now. Make sure you're online!</div>`;
   }
   messages.scrollTop = messages.scrollHeight;
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

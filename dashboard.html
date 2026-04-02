@@ -7,313 +7,251 @@
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/dashboard.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
 </head>
 <body class="dashboard-page">
 
-  <div class="app" id="app">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-      <div class="logo">
-        <span class="brand-mark-sm">◈</span>
-        <div>
-          <div class="logo-name">Scholar</div>
-          <div class="logo-sub serif-italic">academic hub</div>
-        </div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="brand-mark-sm">◈</span>
+      <div><div class="logo-name">Scholar</div><div class="logo-sub">academic hub</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" data-page="overview" onclick="showPage('overview',this)"><span class="nav-icon">◈</span>Overview</div>
+      <div class="nav-item" data-page="grades" onclick="showPage('grades',this)"><span class="nav-icon">◎</span>Grades</div>
+      <div class="nav-item" data-page="assignments" onclick="showPage('assignments',this)"><span class="nav-icon">✦</span>Assignments</div>
+      <div class="nav-item" data-page="attendance" onclick="showPage('attendance',this)"><span class="nav-icon">▦</span>Attendance</div>
+      <div class="nav-section">Workspace</div>
+      <div class="nav-item" data-page="calendar" onclick="showPage('calendar',this)"><span class="nav-icon">▣</span>Calendar</div>
+      <div class="nav-item" data-page="documents" onclick="showPage('documents',this)"><span class="nav-icon">▤</span>Documents</div>
+      <div class="nav-item" data-page="ai" onclick="showPage('ai',this)"><span class="nav-icon">✧</span>AI Tutor</div>
+      <div class="nav-section">Account</div>
+      <div class="nav-item" data-page="integrations" onclick="showPage('integrations',this)"><span class="nav-icon">⟡</span>Integrations</div>
+      <div class="nav-item" data-page="settings" onclick="showPage('settings',this)"><span class="nav-icon">⊙</span>Settings</div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar" id="user-avatar">E</div>
+      <div class="user-info">
+        <div class="user-name" id="user-name-sidebar">Eden</div>
+        <div class="user-grade" id="user-grade-sidebar">Grade 11</div>
       </div>
+      <button class="signout-btn" onclick="handleSignOut()" title="Sign out">⏻</button>
+    </div>
+  </aside>
 
-      <nav class="nav">
-        <div class="nav-item active" data-page="overview" onclick="showPage('overview',this)">
-          <span class="nav-icon">◈</span>Overview
-        </div>
-        <div class="nav-item" data-page="grades" onclick="showPage('grades',this)">
-          <span class="nav-icon">◎</span>Grades
-        </div>
-        <div class="nav-item" data-page="assignments" onclick="showPage('assignments',this)">
-          <span class="nav-icon">✦</span>Assignments
-        </div>
-        <div class="nav-item" data-page="attendance" onclick="showPage('attendance',this)">
-          <span class="nav-icon">▦</span>Attendance
-        </div>
+  <main class="main">
 
-        <div class="nav-section">Workspace</div>
-
-        <div class="nav-item" data-page="calendar" onclick="showPage('calendar',this)">
-          <span class="nav-icon">▣</span>Calendar
-        </div>
-        <div class="nav-item" data-page="documents" onclick="showPage('documents',this)">
-          <span class="nav-icon">▤</span>Documents
-        </div>
-        <div class="nav-item" data-page="ai" onclick="showPage('ai',this)">
-          <span class="nav-icon">✧</span>AI Tutor
-        </div>
-        <div class="nav-item" data-page="settings" onclick="showPage('settings',this)">
-          <span class="nav-icon">⊙</span>Settings
-        </div>
-      </nav>
-
-      <div class="sidebar-user">
-        <div class="user-avatar" id="user-avatar">E</div>
-        <div class="user-info">
-          <div class="user-name" id="user-name-sidebar">Eden</div>
-          <div class="user-grade" id="user-grade-sidebar">Grade 11</div>
-        </div>
-        <button class="signout-btn" onclick="handleSignOut()" title="Sign out">⏻</button>
+    <!-- OVERVIEW -->
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <div><h2 id="greeting">Good morning</h2><p id="today-date">Loading…</p></div>
       </div>
-    </aside>
-
-    <!-- Main -->
-    <main class="main" id="main-content">
-
-      <!-- OVERVIEW -->
-      <div class="page active" id="page-overview">
-        <div class="page-header">
-          <div>
-            <h2 id="greeting">Good morning ✦</h2>
-            <p id="today-date">Loading…</p>
-          </div>
-          <div class="integrations-row">
-            <div class="chip chip-green">◈ Google Classroom</div>
-            <div class="chip chip-blue">◈ Google Docs</div>
-            <div class="chip chip-purple">◈ Notion</div>
-            <div class="chip chip-amber">◈ Google Calendar</div>
-          </div>
-        </div>
-
-        <div class="grid4">
-          <div class="metric"><div class="metric-label">GPA</div><div class="metric-val" id="stat-gpa">3.8</div><div class="metric-sub">↑ +0.1 this term</div></div>
-          <div class="metric"><div class="metric-label">Attendance</div><div class="metric-val" id="stat-attend">96%</div><div class="metric-sub">2 absences</div></div>
-          <div class="metric"><div class="metric-label">Due Soon</div><div class="metric-val" id="stat-due">3</div><div class="metric-sub">next 7 days</div></div>
-          <div class="metric"><div class="metric-label">Streak</div><div class="metric-val" id="stat-streak">1</div><div class="metric-sub">days logged in</div></div>
-        </div>
-
-        <div class="grid2">
-          <div class="card">
-            <div class="card-title">Upcoming assignments</div>
-            <div id="overview-assignments"></div>
-          </div>
-          <div class="card">
-            <div class="card-title">Today's schedule</div>
-            <div id="overview-schedule"></div>
-          </div>
-        </div>
-
-        <div class="ai-bar">
-          <span class="ai-bar-icon">✧</span>
-          <input type="text" placeholder="Ask your AI tutor — 'help me outline my essay', 'explain integration by parts'…" id="quick-input" onkeydown="if(event.key==='Enter')quickAsk()">
-          <button onclick="quickAsk()">Ask ↗</button>
-        </div>
+      <div class="grid4">
+        <div class="metric"><div class="metric-label">GPA</div><div class="metric-val" id="stat-gpa">—</div><div class="metric-sub">current term</div></div>
+        <div class="metric"><div class="metric-label">Attendance</div><div class="metric-val">96%</div><div class="metric-sub">above average</div></div>
+        <div class="metric"><div class="metric-label">Due soon</div><div class="metric-val" id="stat-due">0</div><div class="metric-sub">next 7 days</div></div>
+        <div class="metric"><div class="metric-label">Day streak</div><div class="metric-val" id="stat-streak">1</div><div class="metric-sub">keep it up!</div></div>
       </div>
-
-      <!-- GRADES -->
-      <div class="page" id="page-grades">
-        <div class="page-header"><div><h2>Grades</h2><p>Current term · all classes</p></div></div>
-        <div class="tabs">
-          <div class="tab active" onclick="setTab(this,'grade-current','grade-trend'); if(trendInit) return; trendInit=true; setTimeout(initGradeChart,50)">Current</div>
-          <div class="tab" onclick="setTab(this,'grade-trend','grade-current'); setTimeout(initGradeChart,50)">Trend</div>
-        </div>
-        <div id="grade-current">
-          <div class="card">
-            <div class="card-title">Class grades</div>
-            <div id="grade-bars"></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title" style="margin-bottom:0">Upcoming assignments</div>
+            <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="showPage('assignments',document.querySelector('[data-page=assignments]'))">View all</button>
           </div>
-        </div>
-        <div id="grade-trend" class="hidden">
-          <div class="card">
-            <div class="card-title">GPA over time</div>
-            <div style="position:relative;width:100%;height:240px"><canvas id="gradeChart"></canvas></div>
-          </div>
-          <div class="grid3" style="margin-top:14px">
-            <div class="metric"><div class="metric-label">Highest GPA</div><div class="metric-val">3.9</div><div class="metric-sub">Fall semester</div></div>
-            <div class="metric"><div class="metric-label">Current GPA</div><div class="metric-val" id="current-gpa">3.8</div><div class="metric-sub">Spring sem.</div></div>
-            <div class="metric"><div class="metric-label">Trend</div><div class="metric-val serif-italic" style="font-size:20px">↑ rising</div><div class="metric-sub">+0.2 since 9th</div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ASSIGNMENTS -->
-      <div class="page" id="page-assignments">
-        <div class="page-header">
-          <div><h2>Assignments</h2><p>Synced from Google Classroom</p></div>
-          <button class="btn-secondary" onclick="openAddAssignment()">+ Add assignment</button>
+          <div style="margin-top:14px" id="overview-assignments"></div>
         </div>
         <div class="card">
-          <div class="card-title">All assignments</div>
-          <div id="assignment-list"></div>
+          <div class="card-header"><div class="card-title" style="margin-bottom:0">Today's schedule</div></div>
+          <div style="margin-top:14px" id="overview-schedule"></div>
         </div>
       </div>
-
-      <!-- ATTENDANCE -->
-      <div class="page" id="page-attendance">
-        <div class="page-header"><div><h2>Attendance</h2><p>Spring semester</p></div></div>
-        <div class="grid3">
-          <div class="metric"><div class="metric-label">Present</div><div class="metric-val" id="att-present">48</div><div class="metric-sub">days</div></div>
-          <div class="metric"><div class="metric-label">Absent</div><div class="metric-val" id="att-absent">2</div><div class="metric-sub">days</div></div>
-          <div class="metric"><div class="metric-label">Rate</div><div class="metric-val" id="att-rate">96%</div><div class="metric-sub">above avg</div></div>
-        </div>
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-title">Per class · last 10 sessions</div>
-          <div id="attendance-pips"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Monthly attendance</div>
-          <div style="position:relative;width:100%;height:200px"><canvas id="attendChart"></canvas></div>
-        </div>
-      </div>
-
-      <!-- CALENDAR -->
-      <div class="page" id="page-calendar">
-        <div class="page-header"><div><h2>Calendar</h2><p>Synced with Google Calendar</p></div></div>
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-title">This week</div>
-          <div id="week-view" class="week-grid"></div>
-        </div>
-        <div class="card">
-          <div class="card-title">Upcoming events</div>
-          <div id="event-list"></div>
-        </div>
-      </div>
-
-      <!-- DOCUMENTS -->
-      <div class="page" id="page-documents">
-        <div class="page-header"><div><h2>Documents</h2><p>Google Docs + Notion workspace</p></div></div>
-        <div class="tabs">
-          <div class="tab active" onclick="setTab(this,'doc-gdocs','doc-notion')">Google Docs</div>
-          <div class="tab" onclick="setTab(this,'doc-notion','doc-gdocs')">Notion</div>
-        </div>
-        <div id="doc-gdocs">
-          <div class="card"><div class="card-title">Recent Google Docs</div><div id="gdocs-list"></div></div>
-        </div>
-        <div id="doc-notion" class="hidden">
-          <div class="card"><div class="card-title">Notion pages</div><div id="notion-list"></div></div>
-        </div>
-      </div>
-
-      <!-- AI TUTOR -->
-      <div class="page" id="page-ai">
-        <div class="page-header"><div><h2>AI Tutor</h2><p>Powered by Claude · knows your classes and assignments</p></div></div>
-        <div class="card" style="margin-bottom:14px">
-          <div class="card-title">Quick prompts</div>
-          <div class="quick-btns">
-            <button class="btn-secondary" onclick="sendToChat('Help me outline my animation essay for senior seminar')">Outline my essay ↗</button>
-            <button class="btn-secondary" onclick="sendToChat('Summarize my AP Physics kinematics notes and quiz me')">Quiz me on physics ↗</button>
-            <button class="btn-secondary" onclick="sendToChat('What assignments are due this week and help me prioritize them?')">Prioritize my week ↗</button>
-            <button class="btn-secondary" onclick="sendToChat('Help me write a study schedule for my next exam')">Study schedule ↗</button>
-            <button class="btn-secondary" onclick="sendToChat('Explain integration by parts with 3 practice problems')">Practice problems ↗</button>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-title">Chat</div>
-          <div id="ai-messages" class="ai-messages"></div>
-          <div class="ai-bar" style="margin-top:12px">
-            <span class="ai-bar-icon">✧</span>
-            <input type="text" placeholder="Ask anything about your classes…" id="ai-input" onkeydown="if(event.key==='Enter')sendAI()">
-            <button onclick="sendAI()">Send ↗</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- SETTINGS -->
-      <div class="page" id="page-settings">
-        <div class="page-header"><div><h2>Settings</h2><p>Manage your account and classes</p></div></div>
-
-        <div class="grid2">
-          <div class="card">
-            <div class="card-title">Account</div>
-            <div class="field-group" style="margin-bottom:12px">
-              <label>First name</label>
-              <input type="text" id="settings-first">
-            </div>
-            <div class="field-group" style="margin-bottom:12px">
-              <label>Last name</label>
-              <input type="text" id="settings-last">
-            </div>
-            <div class="field-group" style="margin-bottom:12px">
-              <label>Email</label>
-              <input type="email" id="settings-email" disabled style="opacity:.5">
-            </div>
-            <div class="field-group" style="margin-bottom:16px">
-              <label>Grade / Year</label>
-              <select id="settings-grade">
-                <option value="9">9th Grade</option>
-                <option value="10">10th Grade</option>
-                <option value="11">11th Grade</option>
-                <option value="12">12th Grade</option>
-                <option value="college-1">College · Year 1</option>
-                <option value="college-2">College · Year 2</option>
-              </select>
-            </div>
-            <button class="btn-primary" onclick="saveSettings()">Save changes</button>
-            <div id="settings-msg" class="form-success hidden" style="margin-top:10px"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">My classes</div>
-            <div id="class-list"></div>
-            <div style="display:flex;gap:8px;margin-top:12px">
-              <input type="text" id="new-class-name" placeholder="Class name…" style="flex:1">
-              <input type="color" id="new-class-color" value="#3d6fff" style="width:36px;height:36px;padding:2px;border-radius:6px;border:0.5px solid var(--border);cursor:pointer">
-              <button class="btn-secondary" onclick="addClass()">Add</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" style="margin-top:14px">
-          <div class="card-title">Danger zone</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">
-            <div>
-              <div style="font-size:13px;color:var(--ink)">Sign out of Scholar</div>
-              <div style="font-size:11px;color:var(--ink3)">You'll need to sign back in to access your data</div>
-            </div>
-            <button class="btn-danger" onclick="handleSignOut()">Sign out</button>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:0.5px solid var(--border)">
-            <div>
-              <div style="font-size:13px;color:var(--ink)">Delete account</div>
-              <div style="font-size:11px;color:var(--ink3)">Permanently removes all your data from this device</div>
-            </div>
-            <button class="btn-danger" onclick="deleteAccount()">Delete account</button>
-          </div>
-        </div>
-      </div>
-
-    </main>
-  </div>
-
-  <!-- Add Assignment Modal -->
-  <div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal(event)">
-    <div class="modal">
-      <h3 class="modal-title">Add assignment</h3>
-      <div class="field-group" style="margin-bottom:12px">
-        <label>Title</label>
-        <input type="text" id="modal-title" placeholder="e.g. Physics Lab Report">
-      </div>
-      <div class="field-group" style="margin-bottom:12px">
-        <label>Class</label>
-        <select id="modal-class"></select>
-      </div>
-      <div class="field-group" style="margin-bottom:12px">
-        <label>Due date</label>
-        <input type="date" id="modal-due">
-      </div>
-      <div class="field-group" style="margin-bottom:16px">
-        <label>Status</label>
-        <select id="modal-status">
-          <option value="not-started">Not Started</option>
-          <option value="in-progress">In Progress</option>
-          <option value="submitted">Submitted</option>
-        </select>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn-primary" onclick="saveAssignment()">Save →</button>
-        <button class="btn-secondary" onclick="document.getElementById('modal-overlay').classList.add('hidden')">Cancel</button>
+      <div class="ai-bar">
+        <span class="ai-bar-icon">✧</span>
+        <input type="text" placeholder="Ask your AI tutor anything…" id="quick-input" onkeydown="if(event.key==='Enter')quickAsk()">
+        <button onclick="quickAsk()">Ask ↗</button>
       </div>
     </div>
-  </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-  <script src="js/auth.js"></script>
-  <script src="js/data.js"></script>
-  <script src="js/dashboard.js"></script>
+    <!-- GRADES -->
+    <div class="page" id="page-grades">
+      <div class="page-header"><div><h2>Grades</h2><p>Current term · all classes</p></div></div>
+      <div class="tabs">
+        <div class="tab active" onclick="setTab(this,'grade-current','grade-trend')">Current</div>
+        <div class="tab" onclick="setTab(this,'grade-trend','grade-current');if(!trendInit){trendInit=true;setTimeout(initGradeChart,60)}">Trend</div>
+      </div>
+      <div id="grade-current">
+        <div class="card"><div class="card-title">Class grades</div><div id="grade-bars"></div></div>
+      </div>
+      <div id="grade-trend" class="hidden">
+        <div class="card">
+          <div class="card-title">Grade trend <span style="font-size:10px;color:var(--amber);background:var(--amber-soft);padding:2px 7px;border-radius:4px;margin-left:6px;border:1px solid var(--amber-border)">example data</span></div>
+          <div style="position:relative;width:100%;height:240px"><canvas id="gradeChart"></canvas></div>
+        </div>
+        <div class="grid3" style="margin-top:14px">
+          <div class="metric"><div class="metric-label">Highest GPA</div><div class="metric-val">3.9</div><div class="metric-sub">Fall semester</div></div>
+          <div class="metric"><div class="metric-label">Current GPA</div><div class="metric-val" id="current-gpa">—</div><div class="metric-sub">this term</div></div>
+          <div class="metric"><div class="metric-label">Trend</div><div class="metric-val" style="font-family:var(--serif);font-style:italic;font-size:22px">↑ rising</div><div class="metric-sub">+0.2 over time</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASSIGNMENTS -->
+    <div class="page" id="page-assignments">
+      <div class="page-header">
+        <div><h2>Assignments</h2><p>Track your work and deadlines</p></div>
+        <button class="btn-secondary" onclick="openAddAssignment()">+ Add assignment</button>
+      </div>
+      <div class="card"><div class="card-title">All assignments</div><div id="assignment-list"></div></div>
+    </div>
+
+    <!-- ATTENDANCE -->
+    <div class="page" id="page-attendance">
+      <div class="page-header"><div><h2>Attendance</h2><p>Spring semester</p></div></div>
+      <div class="grid3">
+        <div class="metric"><div class="metric-label">Present</div><div class="metric-val" id="att-present">—</div><div class="metric-sub">days this semester</div></div>
+        <div class="metric"><div class="metric-label">Absent</div><div class="metric-val" id="att-absent">—</div><div class="metric-sub">days missed</div></div>
+        <div class="metric"><div class="metric-label">Rate</div><div class="metric-val" id="att-rate">—</div><div class="metric-sub">attendance rate</div></div>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Per class · last 10 sessions</div>
+        <div id="attendance-pips"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Monthly attendance <span style="font-size:10px;color:var(--amber);background:var(--amber-soft);padding:2px 7px;border-radius:4px;margin-left:6px;border:1px solid var(--amber-border)">example data</span></div>
+        <div style="position:relative;width:100%;height:200px"><canvas id="attendChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div class="page" id="page-calendar">
+      <div class="page-header"><div><h2>Calendar</h2><p>Your week at a glance</p></div></div>
+      <div class="card" style="margin-bottom:16px"><div class="card-title">This week</div><div id="week-view" class="week-grid"></div></div>
+      <div class="card"><div class="card-title">Upcoming</div><div id="event-list"></div></div>
+    </div>
+
+    <!-- DOCUMENTS -->
+    <div class="page" id="page-documents">
+      <div class="page-header"><div><h2>Documents</h2><p>Google Docs + Notion</p></div></div>
+      <div class="tabs">
+        <div class="tab active" onclick="setTab(this,'doc-gdocs','doc-notion')">Google Docs</div>
+        <div class="tab" onclick="setTab(this,'doc-notion','doc-gdocs')">Notion</div>
+      </div>
+      <div id="doc-gdocs"><div class="card"><div class="card-title">Google Docs</div><div id="gdocs-list"></div></div></div>
+      <div id="doc-notion" class="hidden"><div class="card"><div class="card-title">Notion pages</div><div id="notion-list"></div></div></div>
+    </div>
+
+    <!-- AI TUTOR -->
+    <div class="page" id="page-ai">
+      <div class="page-header"><div><h2>AI Tutor</h2><p>Powered by Claude · knows your classes and assignments</p></div></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-title">Quick prompts</div>
+        <div class="quick-btns">
+          <button class="btn-secondary" onclick="sendToChat('Help me outline an essay')">Outline an essay ↗</button>
+          <button class="btn-secondary" onclick="sendToChat('Quiz me on my most recent class material')">Quiz me ↗</button>
+          <button class="btn-secondary" onclick="sendToChat('What assignments are due this week and how should I prioritize them?')">Prioritize my week ↗</button>
+          <button class="btn-secondary" onclick="sendToChat('Help me make a study schedule for my next exam')">Study schedule ↗</button>
+          <button class="btn-secondary" onclick="sendToChat('Explain integration by parts with practice problems')">Practice problems ↗</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Chat</div>
+        <div id="ai-messages" class="ai-messages"></div>
+        <div class="ai-bar" style="margin-top:12px">
+          <span class="ai-bar-icon">✧</span>
+          <input type="text" placeholder="Ask anything about your classes…" id="ai-input" onkeydown="if(event.key==='Enter')sendAI()">
+          <button onclick="sendAI()">Send ↗</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- INTEGRATIONS -->
+    <div class="page" id="page-integrations">
+      <div class="page-header"><div><h2>Integrations</h2><p>Connect your school tools</p></div></div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">Connected services</div>
+        <p style="font-size:12px;color:var(--ink3);margin-bottom:18px;line-height:1.75">Connect your tools to unlock real data — grades, assignments, documents, and calendar events pull in automatically once connected.</p>
+        <div class="integration-grid" id="integrations-grid"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">How it works</div>
+        <p style="font-size:13px;color:var(--ink2);line-height:1.8">Scholar uses OAuth to securely connect to Google and Notion. You authorize Scholar to read your data — nothing is stored on a server, everything stays in your browser. Clicking Connect below shows a preview of how each integration changes your dashboard. Full live OAuth requires a backend deployment.</p>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="page-header"><div><h2>Settings</h2><p>Manage your profile and classes</p></div></div>
+      <div class="grid2">
+        <div class="card">
+          <div class="card-title">Profile</div>
+          <div class="field-group" style="margin-bottom:12px"><label>First name</label><input type="text" id="settings-first"></div>
+          <div class="field-group" style="margin-bottom:12px"><label>Last name</label><input type="text" id="settings-last"></div>
+          <div class="field-group" style="margin-bottom:12px"><label>Email</label><input type="email" id="settings-email" disabled style="opacity:.45;cursor:not-allowed"></div>
+          <div class="field-group" style="margin-bottom:18px">
+            <label>Grade / Year</label>
+            <select id="settings-grade">
+              <option value="6">6th Grade</option><option value="7">7th Grade</option><option value="8">8th Grade</option>
+              <option value="9">9th Grade</option><option value="10">10th Grade</option>
+              <option value="11">11th Grade</option><option value="12">12th Grade</option>
+              <option value="college-1">College · Year 1</option><option value="college-2">College · Year 2</option>
+            </select>
+          </div>
+          <button class="btn-primary" onclick="saveSettings()">Save changes</button>
+          <div id="settings-msg" class="form-success hidden" style="margin-top:10px;margin-bottom:0"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">My classes</div>
+          <div id="class-list"></div>
+          <div style="display:grid;grid-template-columns:1fr 64px 36px auto;gap:8px;margin-top:14px;align-items:center">
+            <input type="text" id="new-class-name" placeholder="Class name…">
+            <input type="number" id="new-class-grade" placeholder="%" min="0" max="100" value="85" style="text-align:center">
+            <input type="color" id="new-class-color" value="#4f6ef7" style="width:36px;height:36px;padding:2px;border-radius:6px;border:1px solid var(--border2);cursor:pointer">
+            <button class="btn-secondary" onclick="addClassFromSettings()">Add</button>
+          </div>
+          <p style="font-size:11px;color:var(--ink3);margin-top:8px">Name · grade % · color</p>
+        </div>
+      </div>
+      <div class="card" style="margin-top:4px">
+        <div class="card-title">Danger zone</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0">
+          <div><div style="font-size:13px;color:var(--ink)">Sign out</div><div style="font-size:11px;color:var(--ink3)">Return to the login page</div></div>
+          <button class="btn-danger" onclick="handleSignOut()">Sign out</button>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+          <div><div style="font-size:13px;color:var(--ink)">Delete account</div><div style="font-size:11px;color:var(--ink3)">Permanently removes all your data</div></div>
+          <button class="btn-danger" onclick="deleteAccount()">Delete account</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="closeModal(event)">
+  <div class="modal">
+    <h3 class="modal-title">Add assignment</h3>
+    <div class="field-group" style="margin-bottom:12px"><label>Title</label><input type="text" id="modal-title" placeholder="e.g. Physics Lab Report"></div>
+    <div class="field-group" style="margin-bottom:12px"><label>Class</label><select id="modal-class"></select></div>
+    <div class="field-group" style="margin-bottom:12px"><label>Due date</label><input type="date" id="modal-due"></div>
+    <div class="field-group" style="margin-bottom:20px"><label>Status</label>
+      <select id="modal-status">
+        <option value="not-started">Not Started</option>
+        <option value="in-progress">In Progress</option>
+        <option value="submitted">Submitted</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" style="flex:1" onclick="saveAssignment()">Save →</button>
+      <button class="btn-secondary" onclick="document.getElementById('modal-overlay').classList.add('hidden')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/data.js"></script>
+<script src="js/dashboard.js"></script>
 </body>
 </html>

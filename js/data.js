@@ -22,22 +22,59 @@ function updateStreak() {
   const now = Date.now();
   const dayMs = 86400000;
   const daysSince = Math.floor((now - last) / dayMs);
-  if (daysSince === 1) {
-    userData.streak = (userData.streak || 1) + 1;
-  } else if (daysSince > 1) {
-    userData.streak = 1;
-  }
+  if (daysSince === 1) userData.streak = (userData.streak || 1) + 1;
+  else if (daysSince > 1) userData.streak = 1;
   userData.lastLogin = now;
   saveUserData();
 }
 
+/* ── INTEGRATIONS ── */
+function getIntegrations() {
+  return userData.integrations || {
+    googleClassroom: false,
+    googleDocs: false,
+    notion: false,
+    googleCalendar: false
+  };
+}
+
+function connectIntegration(key) {
+  userData.integrations = getIntegrations();
+  userData.integrations[key] = true;
+  saveUserData();
+}
+
+function disconnectIntegration(key) {
+  userData.integrations = getIntegrations();
+  userData.integrations[key] = false;
+  saveUserData();
+}
+
+function anyConnected() {
+  const i = getIntegrations();
+  return i.googleClassroom || i.googleDocs || i.notion || i.googleCalendar;
+}
+
+/* ── CLASSES ── */
 function getClasses() { return userData.classes || []; }
+
+function addClassItem(cls) {
+  userData.classes = userData.classes || [];
+  userData.classes.push(cls);
+  saveUserData();
+}
+
+function removeClassItem(name) {
+  userData.classes = userData.classes.filter(c => c.name !== name);
+  saveUserData();
+}
+
+/* ── ASSIGNMENTS ── */
 function getAssignments() { return userData.assignments || []; }
 
 function addAssignment(a) {
   userData.assignments = userData.assignments || [];
   a.id = Date.now();
-  // Inherit color from class
   const cls = getClasses().find(c => c.name === a.className);
   a.color = cls ? cls.color : '#888';
   userData.assignments.push(a);
@@ -49,22 +86,11 @@ function removeAssignment(id) {
   saveUserData();
 }
 
-function addClass(cls) {
-  userData.classes = userData.classes || [];
-  userData.classes.push(cls);
-  saveUserData();
-}
-
-function removeClass(name) {
-  userData.classes = userData.classes.filter(c => c.name !== name);
-  saveUserData();
-}
-
+/* ── PROFILE ── */
 function updateProfile(first, last, grade) {
   userData.firstName = first;
   userData.lastName = last;
   userData.grade = grade;
-  // Update session too
   currentUser.firstName = first;
   currentUser.lastName = last;
   currentUser.grade = grade;
@@ -72,12 +98,12 @@ function updateProfile(first, last, grade) {
   saveUserData();
 }
 
+/* ── COMPUTED ── */
 function computeGPA() {
   const classes = getClasses();
-  if (!classes.length) return 0;
+  if (!classes.length) return '—';
   const avg = classes.reduce((s, c) => s + (c.grade || 0), 0) / classes.length;
-  const gpa = (avg / 100) * 4.3;
-  return Math.round(gpa * 10) / 10;
+  return Math.round((avg / 100) * 4.3 * 10) / 10;
 }
 
 function countDueSoon() {
@@ -85,7 +111,7 @@ function countDueSoon() {
   const week = new Date(now.getTime() + 7 * 86400000);
   return getAssignments().filter(a => {
     if (a.status === 'submitted') return false;
-    const d = new Date(a.due);
+    const d = new Date(a.due + 'T00:00:00');
     return d >= now && d <= week;
   }).length;
 }
@@ -97,24 +123,15 @@ function gradeLabel(pct) {
   if (pct >= 87) return ['B+', 'badge-amber'];
   if (pct >= 83) return ['B',  'badge-amber'];
   if (pct >= 80) return ['B−', 'badge-amber'];
-  if (pct >= 77) return ['C+', 'badge-gray'];
   return ['C', 'badge-gray'];
 }
 
-function gradeColor(pct) {
-  if (pct >= 90) return '#2d8c5e';
-  if (pct >= 80) return '#3d6fff';
-  if (pct >= 70) return '#b85c00';
-  return '#c0392b';
-}
-
 function statusBadge(s) {
-  const m = {
+  return {
     'submitted':   ['Submitted',   'badge-green'],
     'in-progress': ['In Progress', 'badge-blue'],
     'not-started': ['Not Started', 'badge-gray'],
-  };
-  return m[s] || ['Unknown', 'badge-gray'];
+  }[s] || ['Unknown', 'badge-gray'];
 }
 
 function formatDue(dateStr) {
@@ -129,51 +146,50 @@ function formatDue(dateStr) {
 }
 
 function formatGrade(g) {
-  const m = {
+  return {
     '6':'6th Grade','7':'7th Grade','8':'8th Grade',
     '9':'9th Grade','10':'10th Grade','11':'11th Grade','12':'12th Grade',
     'college-1':'College · Year 1','college-2':'College · Year 2',
     'college-3':'College · Year 3','college-4':'College · Year 4',
-  };
-  return m[g] || `Grade ${g}`;
+  }[g] || `Grade ${g}`;
 }
 
-/* Static schedule + events for demo */
-const SCHEDULE = [
-  { time: '8:15 am', title: 'AP Physics', sub: 'Room 204 · 50 min', color: '#3d6fff' },
-  { time: '10:00 am', title: 'Senior Seminar', sub: 'Library · 50 min', color: '#2d8c5e' },
-  { time: '1:00 pm', title: 'AP Calculus', sub: 'Room 118 · 50 min', color: '#9b59b6' },
-  { time: '3:30 pm', title: 'Art Studio', sub: 'Elective · 90 min', color: '#b85c00' },
+/* ── STATIC DEMO DATA (only shown when integrations not connected) ── */
+const DEMO_SCHEDULE = [
+  { time: '8:15 am', title: 'AP Physics', sub: 'Room 204', color: '#4f6ef7' },
+  { time: '10:00 am', title: 'Senior Seminar', sub: 'Library', color: '#16a34a' },
+  { time: '1:00 pm', title: 'AP Calculus', sub: 'Room 118', color: '#7c3aed' },
+  { time: '3:30 pm', title: 'Art Studio', sub: 'Elective', color: '#d97706' },
 ];
 
-const GDOCS = [
-  { icon: '📄', title: 'Animation Essay — Senior Project', meta: 'Edited 2 hours ago · Senior Seminar', badge: 'Draft', badgeCls: 'badge-blue' },
-  { icon: '📄', title: 'Physics Cheat Sheet — Kinematics', meta: 'Edited yesterday · AP Physics', badge: 'Final', badgeCls: 'badge-green' },
-  { icon: '📄', title: 'WWI Primary Source Notes', meta: 'Edited 3 days ago · World History', badge: 'In Progress', badgeCls: 'badge-amber' },
-  { icon: '📊', title: 'Lab Report — Projectile Motion', meta: 'Edited 4 days ago · AP Physics', badge: 'Draft', badgeCls: 'badge-amber' },
-  { icon: '📄', title: 'English Lit Reflection #6', meta: 'Edited last week · English Lit', badge: 'Submitted', badgeCls: 'badge-green' },
+const DEMO_EVENTS = [
+  { date: 'Apr 7', title: 'Animation Essay Draft', sub: 'Senior Seminar', color: '#16a34a' },
+  { date: 'Apr 10', title: 'WWI Source Analysis', sub: 'World History', color: '#d97706' },
+  { date: 'Apr 15', title: 'AP Calculus Midterm', sub: 'Room 118 · 7:30am', color: '#7c3aed' },
+  { date: 'Apr 22', title: 'Art Show Opening', sub: 'Main Gallery · 6pm', color: '#e91e8c' },
 ];
 
-const NOTION_DOCS = [
-  { icon: '🌌', title: 'Veyra & Cael Universe Notes', meta: 'Personal worldbuilding · Updated today', tag: 'Creative' },
-  { icon: '⚛️', title: 'Physics Notes — All Units', meta: 'AP Physics · Converted from Notion', tag: 'School' },
-  { icon: '🎮', title: 'Void Drift — Game Design Doc', meta: 'Godot project · Updated 2 days ago', tag: 'Project' },
-  { icon: '🎨', title: 'Art Techniques Reference', meta: 'Watercolor, ink, oil · Updated this week', tag: 'Art' },
-  { icon: '📋', title: 'Senior Project Tracker', meta: 'Milestones + deadlines', tag: 'School' },
+const DEMO_GDOCS = [
+  { icon: '📄', title: 'Sample Essay Draft', meta: 'Connect Google Docs to see your real files', badge: 'Example', badgeCls: 'badge-gray' },
+  { icon: '📊', title: 'Sample Lab Report', meta: 'Connect Google Docs to see your real files', badge: 'Example', badgeCls: 'badge-gray' },
 ];
+
+const DEMO_NOTION = [
+  { icon: '📋', title: 'Sample Notes Page', meta: 'Connect Notion to see your real pages', tag: 'Example' },
+];
+
+const GRADE_TREND = {
+  months: ['Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'],
+  datasets: [
+    { label: 'Physics',   data: [88,89,90,91,90,92,91,91], color: '#4f6ef7' },
+    { label: 'Calculus',  data: [80,81,82,84,83,84,84,84], color: '#7c3aed' },
+    { label: 'Art',       data: [95,96,97,98,97,98,98,98], color: '#e91e8c' },
+    { label: 'English',   data: [84,85,86,87,87,87,88,87], color: '#16a34a' },
+  ]
+};
 
 const ATTENDANCE_DATA = {
   months: ['Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
   present: [20,21,19,18,20,20,20],
   absent:  [0, 0, 1, 0, 0, 1, 0],
-};
-
-const GRADE_TREND = {
-  months: ['Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'],
-  datasets: [
-    { label: 'AP Physics',     data: [88,89,90,91,90,92,91,91], color: '#3d6fff' },
-    { label: 'AP Calculus',    data: [80,81,82,84,83,84,84,84], color: '#9b59b6' },
-    { label: 'Art Studio',     data: [95,96,97,98,97,98,98,98], color: '#e91e8c' },
-    { label: 'English Lit',    data: [84,85,86,87,87,87,88,87], color: '#16a085' },
-  ]
 };
