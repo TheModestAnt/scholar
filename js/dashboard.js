@@ -1,483 +1,555 @@
-/* ── SCHOLAR DASHBOARD ── */
+/* ── SCHOLAR DASHBOARD v3 ── */
 
-let gradeChartInst = null;
-let attendChartInst = null;
-let trendInit = false;
+let asnTabMode = 'upcoming';
 let aiHistory = [];
+let attendChartInst = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   initData();
   if (!currentUser) return;
   renderSidebar();
-  renderAll();
+  renderOverview();
+  renderAssignments();
+  renderSchedule();
+  renderGrades();
+  renderAttendance();
+  renderSettings();
 });
 
-function renderAll() {
-  renderOverview();
-  renderGrades();
-  renderAssignments();
-  renderAttendance();
-  renderCalendar();
-  renderDocuments();
-  renderSettings();
-  renderIntegrationsPage();
-  setTimeout(initAttendChart, 120);
-}
-
-/* ── SIDEBAR ── */
+/* ══ SIDEBAR ══ */
 function renderSidebar() {
   const name = userData.firstName || currentUser.firstName || 'Student';
-  const grade = userData.grade || currentUser.grade || '';
-  document.getElementById('user-name-sidebar').textContent = name;
-  document.getElementById('user-grade-sidebar').textContent = formatGrade(grade);
+  document.getElementById('sidebar-name').textContent = name;
+  document.getElementById('sidebar-grade').textContent = formatGrade(userData.grade || currentUser.grade || '');
   document.getElementById('user-avatar').textContent = name[0].toUpperCase();
 }
 
-/* ── OVERVIEW ── */
+/* ══ OVERVIEW ══ */
 function renderOverview() {
   const name = userData.firstName || currentUser.firstName || 'there';
-  const hour = new Date().getHours();
-  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  document.getElementById('greeting').textContent = `${greet}, ${name}`;
-
-  const now = new Date();
-  document.getElementById('today-date').textContent =
-    now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const h = new Date().getHours();
+  document.getElementById('greeting').textContent =
+    `${h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'}, ${name}`;
+  document.getElementById('today-str').textContent =
+    new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
 
   const gpa = computeGPA();
-  document.getElementById('stat-gpa').textContent = gpa;
-  document.getElementById('stat-due').textContent = countDueSoon();
-  document.getElementById('stat-streak').textContent = userData.streak || 1;
+  document.getElementById('ov-gpa').textContent = gpa;
+  document.getElementById('ov-gpa-sub').textContent = gpa === '—' ? 'add grades to calculate' : 'current GPA';
+  document.getElementById('ov-due').textContent = countDueSoon();
+  document.getElementById('ov-streak').textContent = userData.streak || 1;
 
-  // Upcoming assignments
-  const container = document.getElementById('overview-assignments');
-  const upcoming = getAssignments()
-    .filter(a => a.status !== 'submitted')
-    .sort((a,b) => a.due.localeCompare(b.due))
-    .slice(0, 4);
+  const rate = getOverallAttendanceRate();
+  document.getElementById('ov-attend').textContent = rate !== null ? rate + '%' : '—';
 
-  if (!upcoming.length) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🎉</div><p>No upcoming assignments!<br>Add one in the Assignments tab.</p></div>`;
+  // Today's schedule
+  const todaySched = getTodaySchedule();
+  const schedEl = document.getElementById('ov-today-schedule');
+  if (!todaySched.length) {
+    schedEl.innerHTML = `<div class="today-none">No classes scheduled today. <a href="#" onclick="nav('schedule',document.querySelector('[data-page=schedule]'));return false" style="color:var(--accent)">Set up your schedule →</a></div>`;
   } else {
-    container.innerHTML = upcoming.map(a => assignRow(a)).join('');
+    schedEl.innerHTML = `<div class="today-strip">${todaySched.map(b => {
+      const cls = getClassById(b.classId);
+      const color = cls ? cls.color : '#888';
+      return `<div class="today-block" style="background:${color}18;border:1px solid ${color}30">
+        <div class="today-block-time" style="color:${color}">${formatTime(b.startTime)} – ${formatTime(b.endTime)}</div>
+        <div class="today-block-name" style="color:${color}">${escHtml(b.className)}</div>
+        ${b.room ? `<div class="today-block-room" style="color:${color}">${escHtml(b.room)}</div>` : ''}
+      </div>`;
+    }).join('')}</div>`;
   }
 
-  // Schedule — show notice if Google Calendar not connected
-  const integ = getIntegrations();
-  const schedContainer = document.getElementById('overview-schedule');
-  if (!integ.googleCalendar) {
-    schedContainer.innerHTML = `
-      <div class="notice"><span class="notice-icon">📅</span>Connect Google Calendar to see your real schedule</div>
-      ${DEMO_SCHEDULE.map(e => `
-        <div class="event-item" style="opacity:.5">
-          <div class="event-time">${e.time}</div>
-          <div class="event-dot" style="background:${e.color}"></div>
-          <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
-        </div>`).join('')}
-      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Calendar →</button>`;
+  // Upcoming assignments
+  const upcoming = getAssignments()
+    .filter(a => a.status !== 'submitted' && a.status !== 'graded')
+    .sort((a,b) => a.due.localeCompare(b.due))
+    .slice(0, 5);
+
+  const asnEl = document.getElementById('ov-assignments');
+  if (!upcoming.length) {
+    asnEl.innerHTML = `<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🎉</div><p>Nothing due soon!</p></div>`;
   } else {
-    schedContainer.innerHTML = DEMO_SCHEDULE.map(e => `
-      <div class="event-item">
-        <div class="event-time">${e.time}</div>
-        <div class="event-dot" style="background:${e.color}"></div>
-        <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
-      </div>`).join('');
+    asnEl.innerHTML = upcoming.map(a => asnRow(a)).join('');
   }
 }
 
-function assignRow(a) {
+function asnRow(a, showRemove) {
   const [badge, cls] = statusBadge(a.status);
   const due = formatDue(a.due);
-  const urgent = (due === 'Today' || due === 'Tomorrow' || due === 'Past due') && a.status !== 'submitted';
-  return `<div class="assign-item" style="${a.status==='submitted'?'opacity:.5':''}">
-    <div class="assign-dot" style="background:${a.color}"></div>
-    <div style="flex:1"><div class="assign-title">${escHtml(a.title)}</div><div class="assign-class">${escHtml(a.className)}</div></div>
-    <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-      <div class="assign-due" style="${urgent?'color:var(--red);font-weight:500':''}">${due}</div>
+  const overdue = due.includes('overdue');
+  const urgent = (due === 'Today' || due === 'Tomorrow' || overdue) && a.status !== 'submitted' && a.status !== 'graded';
+  return `<div class="row-item">
+    <div class="row-dot" style="background:${a.color || '#888'}"></div>
+    <div style="flex:1;min-width:0">
+      <div class="row-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(a.title)}</div>
+      <div class="row-sub">${escHtml(a.className)}${a.type ? ' · ' + a.type : ''}</div>
+    </div>
+    <div class="row-right">
+      <div style="font-size:11px;font-weight:500;color:${urgent ? 'var(--red)' : 'var(--ink3)'};margin-bottom:3px">${due}</div>
       <span class="badge ${cls}">${badge}</span>
     </div>
+    ${showRemove ? `<button class="row-remove" onclick="removeAssignment('${a.id}');renderAll()" title="Remove">×</button>` : ''}
   </div>`;
 }
 
-/* ── GRADES ── */
-function renderGrades() {
-  const classes = getClasses();
-  const integ = getIntegrations();
-
-  let html = '';
-  if (!integ.googleClassroom && !classes.length) {
-    html = `<div class="notice"><span class="notice-icon">📚</span>Connect Google Classroom to import your grades automatically</div>
-      <div class="empty-state"><div class="empty-state-icon">◎</div><p>No classes yet.<br>Add classes manually in Settings, or connect Google Classroom.</p>
-      <button class="connect-btn" style="margin-top:14px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Classroom →</button></div>`;
-  } else {
-    html = classes.map(c => {
-      const [letter, cls] = gradeLabel(c.grade);
-      return `<div class="grade-row">
-        <span class="grade-name">${escHtml(c.name)}</span>
-        <div class="grade-bar-wrap"><div class="grade-bar" style="width:${c.grade}%;background:${c.color}"></div></div>
-        <span class="grade-pct">${c.grade}%</span>
-        <span class="grade-letter badge ${cls}">${letter}</span>
-      </div>`;
-    }).join('');
-  }
-  document.getElementById('grade-bars').innerHTML = html;
-
-  const gpa = computeGPA();
-  const gpaEl = document.getElementById('current-gpa');
-  if (gpaEl) gpaEl.textContent = gpa;
+/* ══ ASSIGNMENTS ══ */
+function setAsnTab(mode, el) {
+  asnTabMode = mode;
+  document.querySelectorAll('#page-assignments .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderAssignments();
 }
 
-function initGradeChart() {
-  const el = document.getElementById('gradeChart');
-  if (!el) return;
-  if (gradeChartInst) { gradeChartInst.destroy(); gradeChartInst = null; }
-  gradeChartInst = new Chart(el, {
-    type: 'line',
-    data: {
-      labels: GRADE_TREND.months,
-      datasets: GRADE_TREND.datasets.map(d => ({
-        label: d.label, data: d.data, borderColor: d.color,
-        tension: .4, pointRadius: 3, fill: false, borderWidth: 2,
-        pointBackgroundColor: d.color,
-      }))
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, padding: 14, font: { size: 11, family: 'DM Sans' }, usePointStyle: true } } },
-      scales: {
-        y: { min: 75, max: 100, ticks: { font: { size: 11 } }, grid: { color: 'rgba(128,128,128,.1)' } },
-        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
-      }
-    }
-  });
-}
-
-/* ── ASSIGNMENTS ── */
 function renderAssignments() {
-  const integ = getIntegrations();
-  const all = getAssignments().sort((a,b) => {
-    if (a.status === 'submitted' && b.status !== 'submitted') return 1;
-    if (b.status === 'submitted' && a.status !== 'submitted') return -1;
-    return a.due.localeCompare(b.due);
-  });
+  // Update filter dropdown
+  const filter = document.getElementById('asn-filter');
+  const filterVal = filter ? filter.value : 'all';
+  rebuildClassFilter('asn-filter');
+  if (filter) filter.value = filterVal;
 
-  let html = '';
-  if (!integ.googleClassroom && !all.length) {
-    html = `<div class="notice"><span class="notice-icon">📚</span>Connect Google Classroom to sync assignments automatically</div>
-      <div class="empty-state"><div class="empty-state-icon">✦</div><p>No assignments yet.<br>Add one with the button above, or connect Google Classroom.</p></div>`;
-  } else {
-    html = all.map(a => `
-      <div class="assign-item" style="${a.status==='submitted'?'opacity:.5':''}">
-        <div class="assign-dot" style="background:${a.color}"></div>
-        <div style="flex:1"><div class="assign-title">${escHtml(a.title)}</div><div class="assign-class">${escHtml(a.className)}</div></div>
-        <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-          <div class="assign-due">${formatDue(a.due)}</div>
-          <span class="badge ${statusBadge(a.status)[1]}">${statusBadge(a.status)[0]}</span>
-        </div>
-        <button onclick="removeAssignment(${a.id});renderAssignments();renderOverview()" title="Remove"
-          style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:16px;margin-left:8px;padding:0 2px;line-height:1;transition:color .12s"
-          onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--ink3)'">×</button>
-      </div>`).join('') || `<div class="empty-state"><div class="empty-state-icon">🎉</div><p>All done! No assignments remaining.</p></div>`;
+  let all = getAssignments();
+  if (filterVal && filterVal !== 'all') {
+    all = all.filter(a => a.classId === filterVal);
   }
-  document.getElementById('assignment-list').innerHTML = html;
-}
 
-function openAddAssignment() {
-  const sel = document.getElementById('modal-class');
-  const classes = getClasses();
-  if (!classes.length) {
-    alert('Add some classes in Settings first!');
+  let filtered;
+  const now = new Date(); now.setHours(0,0,0,0);
+  if (asnTabMode === 'upcoming') {
+    filtered = all.filter(a => a.status !== 'submitted' && a.status !== 'graded')
+      .sort((a,b) => a.due.localeCompare(b.due));
+  } else if (asnTabMode === 'graded') {
+    filtered = all.filter(a => a.status === 'graded' || a.status === 'submitted')
+      .sort((a,b) => b.due.localeCompare(a.due));
+  } else {
+    filtered = [...all].sort((a,b) => a.due.localeCompare(b.due));
+  }
+
+  const el = document.getElementById('assignment-list');
+  if (!filtered.length) {
+    const msgs = { upcoming:'No upcoming assignments! Enjoy the break.', graded:'No graded assignments yet.', all:'No assignments yet. Add one above!' };
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">✦</div><p>${msgs[asnTabMode]}</p></div>`;
     return;
   }
-  sel.innerHTML = classes.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-  const d = new Date(); d.setDate(d.getDate()+1);
-  document.getElementById('modal-due').value = d.toISOString().slice(0,10);
-  document.getElementById('modal-title').value = '';
-  document.getElementById('modal-overlay').classList.remove('hidden');
+  el.innerHTML = filtered.map(a => asnRow(a, true)).join('');
 }
 
-function saveAssignment() {
-  const title = document.getElementById('modal-title').value.trim();
-  const className = document.getElementById('modal-class').value;
-  const due = document.getElementById('modal-due').value;
-  const status = document.getElementById('modal-status').value;
-  if (!title || !due) return;
-  addAssignment({ title, className, due, status });
-  document.getElementById('modal-overlay').classList.add('hidden');
-  renderAssignments();
+/* ══ SCHEDULE ══ */
+function renderSchedule() {
+  const grid = document.getElementById('schedule-grid');
+  const todayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
+
+  grid.innerHTML = DAYS.map(day => {
+    const blocks = getScheduleForDay(day);
+    const isToday = day === todayName;
+    return `<div class="schedule-day-col">
+      <div class="schedule-day-header${isToday?' today-header':''}">${day.slice(0,3)}</div>
+      ${blocks.length ? blocks.map(b => {
+        const cls = getClassById(b.classId);
+        const color = cls ? cls.color : '#888';
+        return `<div class="schedule-block" style="background:${color}18;border:1px solid ${color}35;color:${color}">
+          <button class="remove-block" onclick="removeScheduleBlock('${b.id}');renderSchedule();renderOverview()" title="Remove">×</button>
+          <div class="schedule-block-name">${escHtml(b.className)}</div>
+          <div class="schedule-block-time">${formatTime(b.startTime)}–${formatTime(b.endTime)}</div>
+          ${b.room ? `<div class="schedule-block-room">${escHtml(b.room)}</div>` : ''}
+        </div>`;
+      }).join('') : `<div class="schedule-empty">—</div>`}
+    </div>`;
+  }).join('');
+}
+
+/* ══ GRADES ══ */
+function renderGrades() {
+  rebuildClassFilter('grade-class-filter');
+  renderGradeSummaries();
+  renderGradeEntries();
+}
+
+function renderGradeSummaries() {
+  const classes = getClasses();
+  const el = document.getElementById('grade-summaries');
+  if (!classes.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">◎</div><p>Add classes in Settings first, then add grades here.</p></div>`;
+    return;
+  }
+  el.innerHTML = classes.map(c => {
+    const pct = computeClassGrade(c.id);
+    const [letter, badge] = gradeLabel(pct);
+    const entries = getGradeEntriesForClass(c.id);
+    return `<div class="grade-row">
+      <span class="grade-name">${escHtml(c.name)}</span>
+      <div class="grade-bar-wrap"><div class="grade-bar" style="width:${pct !== null ? pct : 0}%;background:${c.color}"></div></div>
+      <span class="grade-pct">${pct !== null ? pct + '%' : '—'}</span>
+      <span class="grade-letter badge ${badge}">${letter}</span>
+      <span style="font-size:11px;color:var(--ink3);min-width:60px;text-align:right">${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderGradeEntries() {
+  const filterSel = document.getElementById('grade-class-filter');
+  const filterVal = filterSel ? filterSel.value : 'all';
+  let entries = getGradeEntries();
+  if (filterVal && filterVal !== 'all') {
+    entries = entries.filter(e => e.classId === filterVal);
+  }
+  entries = entries.sort((a,b) => (b.date || '').localeCompare(a.date || ''));
+
+  const el = document.getElementById('grade-entries');
+  if (!entries.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">◎</div><p>No grades entered yet.<br>Click "+ Add grade" to record a score.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = `<table class="grade-table">
+    <thead><tr>
+      <th>Assignment</th><th>Class</th><th>Category</th><th>Date</th><th>Score</th><th></th>
+    </tr></thead>
+    <tbody>${entries.map(e => {
+      const pct = Math.round((Number(e.earned) / Number(e.possible)) * 1000) / 10;
+      const [letter, badge] = gradeLabel(pct);
+      const cls = getClassById(e.classId);
+      return `<tr>
+        <td>${escHtml(e.title)}</td>
+        <td><span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${cls ? cls.color : '#888'};flex-shrink:0"></span>${escHtml(cls ? cls.name : '—')}</span></td>
+        <td style="color:var(--ink3)">${escHtml(e.category || '—')}</td>
+        <td style="color:var(--ink3)">${formatDate(e.date)}</td>
+        <td><span class="grade-pct-pill badge ${badge}">${e.earned}/${e.possible} <span style="opacity:.7">(${pct}%)</span></span></td>
+        <td><button class="row-remove" onclick="removeGradeEntry('${e.id}');renderGrades();renderOverview()" title="Remove">×</button></td>
+      </tr>`;
+    }).join('')}</tbody>
+  </table>`;
+}
+
+/* ══ ATTENDANCE ══ */
+function renderAttendance() {
+  const classes = getClasses();
+  let totalPresent = 0, totalAbsent = 0;
+  classes.forEach(c => {
+    const records = getAttendanceForClass(c.id);
+    records.forEach(r => r.present ? totalPresent++ : totalAbsent++);
+  });
+  const total = totalPresent + totalAbsent;
+  const rate = total ? Math.round((totalPresent/total)*100) : null;
+  document.getElementById('att-rate').textContent = rate !== null ? rate + '%' : '—';
+  document.getElementById('att-present').textContent = totalPresent || '—';
+  document.getElementById('att-absent').textContent = totalAbsent || '—';
+
+  const el = document.getElementById('attend-list');
+  if (!classes.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">▦</div><p>Add classes in Settings, then log attendance here.</p></div>`;
+    return;
+  }
+  el.innerHTML = classes.map(c => {
+    const records = getAttendanceForClass(c.id).slice(-15);
+    const classRate = getAttendanceRate(c.id);
+    const pips = records.map(r =>
+      `<div class="pip" title="${r.date}: ${r.present?'Present':'Absent'}" style="background:${r.present?'var(--green)':'var(--red)'}"></div>`
+    ).join('');
+    return `<div class="attend-row">
+      <span class="attend-name">${escHtml(c.name)}</span>
+      <div class="attend-pips">${pips || '<span style="font-size:11px;color:var(--ink3)">No records yet</span>'}</div>
+      <span class="attend-rate">${classRate !== null ? classRate + '%' : '—'}</span>
+      <button class="attend-log-btn" onclick="quickLogAttendance('${c.id}')">Log today</button>
+    </div>`;
+  }).join('');
+}
+
+function quickLogAttendance(classId) {
+  const cls = getClassById(classId);
+  if (!cls) return;
+  const today = todayISO();
+  const existing = getAttendanceForClass(classId).find(r => r.date === today);
+  const wasPresent = existing ? existing.present : null;
+  const msg = wasPresent !== null
+    ? `Today's record: ${wasPresent ? 'Present ✓' : 'Absent ✗'}\nChange to:`
+    : `Log attendance for ${cls.name} today (${today}):`;
+  const choice = confirm(`${msg}\n\nOK = Present  |  Cancel = Absent`);
+  logAttendance(classId, today, choice);
+  renderAttendance();
   renderOverview();
 }
 
-function closeModal(e) {
-  if (e.target === document.getElementById('modal-overlay'))
-    document.getElementById('modal-overlay').classList.add('hidden');
-}
-
-/* ── ATTENDANCE ── */
-function renderAttendance() {
-  const total = ATTENDANCE_DATA.present.reduce((a,b)=>a+b,0) + ATTENDANCE_DATA.absent.reduce((a,b)=>a+b,0);
-  const totalPresent = ATTENDANCE_DATA.present.reduce((a,b)=>a+b,0);
-  const totalAbsent = ATTENDANCE_DATA.absent.reduce((a,b)=>a+b,0);
-  const rate = Math.round((totalPresent / total) * 100);
-  document.getElementById('att-present').textContent = totalPresent;
-  document.getElementById('att-absent').textContent = totalAbsent;
-  document.getElementById('att-rate').textContent = rate + '%';
-
-  const integ = getIntegrations();
-  const pipsContainer = document.getElementById('attendance-pips');
-
-  if (!integ.googleClassroom) {
-    pipsContainer.innerHTML = `<div class="notice" style="margin:0"><span class="notice-icon">▦</span>Connect Google Classroom to track real attendance. Showing example data below.</div>`;
-    const exampleClasses = getClasses().slice(0, 5);
-    const patterns = [[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,0,1,1,1,1,0],[1,1,1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1,1,1]];
-    const rates = ['100%','100%','80%','100%','100%'];
-    const badges = ['badge-green','badge-green','badge-amber','badge-green','badge-green'];
-    const names = exampleClasses.length ? exampleClasses.map(c=>c.name) : ['AP Physics','Senior Seminar','AP Calculus','World History','Art Studio'];
-    pipsContainer.innerHTML += names.map((name,i) => `
-      <div class="attend-row" style="opacity:.6">
-        <span class="attend-name">${escHtml(name)}</span>
-        <div class="attend-pips">${(patterns[i]||patterns[0]).map(p=>`<div class="pip" style="background:${p?'var(--green)':'var(--red)'}"></div>`).join('')}</div>
-        <span class="badge ${badges[i]}" style="margin-left:12px">${rates[i]}</span>
-      </div>`).join('');
-  } else {
-    const classes = getClasses();
-    pipsContainer.innerHTML = classes.map(c => `
-      <div class="attend-row">
-        <span class="attend-name">${escHtml(c.name)}</span>
-        <div class="attend-pips">${[1,1,1,1,1,1,1,1,1,1].map(p=>`<div class="pip" style="background:var(--green)"></div>`).join('')}</div>
-        <span class="badge badge-green" style="margin-left:12px">100%</span>
-      </div>`).join('');
-  }
-}
-
-function initAttendChart() {
-  const el = document.getElementById('attendChart');
-  if (!el || attendChartInst) return;
-  attendChartInst = new Chart(el, {
-    type: 'bar',
-    data: {
-      labels: ATTENDANCE_DATA.months,
-      datasets: [
-        { label: 'Present', data: ATTENDANCE_DATA.present, backgroundColor: 'rgba(22,163,74,.15)', borderColor: '#16a34a', borderWidth: 1.5, borderRadius: 5 },
-        { label: 'Absent',  data: ATTENDANCE_DATA.absent,  backgroundColor: 'rgba(220,38,38,.15)', borderColor: '#dc2626', borderWidth: 1.5, borderRadius: 5 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'top', labels: { boxWidth: 8, padding: 14, font: { size: 11 }, usePointStyle: true } } },
-      scales: {
-        y: { ticks: { font: { size: 11 } }, grid: { color: 'rgba(128,128,128,.1)' } },
-        x: { ticks: { font: { size: 11 } }, grid: { display: false } }
-      }
-    }
-  });
-}
-
-/* ── CALENDAR ── */
-function renderCalendar() {
-  const today = new Date();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-
-  document.getElementById('week-view').innerHTML = ['Mon','Tue','Wed','Thu','Fri'].map((d, i) => {
-    const date = new Date(monday); date.setDate(monday.getDate() + i);
-    const isToday = date.toDateString() === today.toDateString();
-    return `<div class="week-day${isToday?' today':''}">
-      <div class="week-day-label">${d}</div>
-      <div class="week-day-num">${date.getDate()}</div>
-      ${isToday ? '<div class="week-event" style="background:var(--accent-soft);color:var(--accent)">Today</div>' : ''}
-    </div>`;
-  }).join('');
-
-  const integ = getIntegrations();
-  const eventList = document.getElementById('event-list');
-
-  const upcoming = getAssignments()
-    .filter(a => a.status !== 'submitted')
-    .sort((a,b) => a.due.localeCompare(b.due))
-    .slice(0, 5)
-    .map(a => ({ date: formatDue(a.due), title: a.title, sub: a.className, color: a.color }));
-
-  if (!integ.googleCalendar && !upcoming.length) {
-    eventList.innerHTML = `
-      <div class="notice"><span class="notice-icon">📅</span>Connect Google Calendar to see all your events here</div>
-      ${DEMO_EVENTS.map(e=>`<div class="event-item" style="opacity:.45">
-        <div class="event-time">${e.date}</div>
-        <div class="event-dot" style="background:${e.color}"></div>
-        <div><div class="event-title">${e.title}</div><div class="event-sub">${e.sub}</div></div>
-      </div>`).join('')}
-      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Calendar →</button>`;
-  } else {
-    eventList.innerHTML = (upcoming.length ? upcoming : DEMO_EVENTS).map(e => `
-      <div class="event-item">
-        <div class="event-time">${e.date}</div>
-        <div class="event-dot" style="background:${e.color}"></div>
-        <div><div class="event-title">${escHtml(e.title)}</div><div class="event-sub">${escHtml(e.sub)}</div></div>
-      </div>`).join('');
-  }
-}
-
-/* ── DOCUMENTS ── */
-function renderDocuments() {
-  const integ = getIntegrations();
-
-  const gdocsEl = document.getElementById('gdocs-list');
-  if (!integ.googleDocs) {
-    gdocsEl.innerHTML = `
-      <div class="notice"><span class="notice-icon">📄</span>Connect Google Docs to see your real documents here</div>
-      ${DEMO_GDOCS.map(d=>`<div class="doc-item" style="opacity:.45">
-        <div class="doc-icon">${d.icon}</div>
-        <div style="flex:1"><div class="doc-title">${d.title}</div><div class="doc-meta">${d.meta}</div></div>
-        <span class="badge ${d.badgeCls}">${d.badge}</span>
-      </div>`).join('')}
-      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Google Docs →</button>`;
-  } else {
-    gdocsEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📄</div><p>Google Docs connected!<br>Full API integration coming soon.</p></div>`;
-  }
-
-  const notionEl = document.getElementById('notion-list');
-  if (!integ.notion) {
-    notionEl.innerHTML = `
-      <div class="notice"><span class="notice-icon">◈</span>Connect Notion to see your pages here</div>
-      ${DEMO_NOTION.map(d=>`<div class="doc-item" style="opacity:.45">
-        <div class="doc-icon">${d.icon}</div>
-        <div style="flex:1"><div class="doc-title">${d.title}</div><div class="doc-meta">${d.meta}</div></div>
-        <span class="tag">${d.tag}</span>
-      </div>`).join('')}
-      <button class="connect-btn" style="margin-top:12px;width:100%;padding:8px" onclick="showPage('integrations',document.querySelector('[data-page=integrations]'))">Connect Notion →</button>`;
-  } else {
-    notionEl.innerHTML = `<div class="empty-state"><div class="empty-state-icon">◈</div><p>Notion connected!<br>Full API integration coming soon.</p></div>`;
-  }
-}
-
-/* ── INTEGRATIONS PAGE ── */
-function renderIntegrationsPage() {
-  const integ = getIntegrations();
-  const integrations = [
-    { key: 'googleClassroom', icon: '🏫', name: 'Google Classroom', desc: 'Sync grades, assignments & attendance', color: 'var(--accent)' },
-    { key: 'googleDocs',      icon: '📄', name: 'Google Docs',      desc: 'Access your documents & drafts', color: '#16a34a' },
-    { key: 'googleCalendar',  icon: '📅', name: 'Google Calendar',  desc: 'See your schedule & due dates', color: '#d97706' },
-    { key: 'notion',          icon: '◈',  name: 'Notion',           desc: 'Browse your notes & pages', color: '#7c3aed' },
-  ];
-
-  document.getElementById('integrations-grid').innerHTML = integrations.map(i => {
-    const connected = integ[i.key];
-    return `<div class="integration-card${connected?' connected':''}">
-      <div class="int-left">
-        <div class="int-icon">${i.icon}</div>
-        <div>
-          <div class="int-name">${i.name}</div>
-          <div class="int-status${connected?' live':''}">${connected ? '● Connected' : i.desc}</div>
-        </div>
-      </div>
-      ${connected
-        ? `<button class="btn-secondary" style="font-size:11px;padding:5px 10px;color:var(--ink3)" onclick="disconnectIntegration('${i.key}');renderAll()">Disconnect</button>`
-        : `<button class="connect-btn" onclick="handleConnect('${i.key}')">Connect →</button>`
-      }
-    </div>`;
-  }).join('');
-}
-
-function handleConnect(key) {
-  // In production this would open an OAuth flow.
-  // For now, mark as connected so the UI reflects the state.
-  const names = {
-    googleClassroom: 'Google Classroom',
-    googleDocs: 'Google Docs',
-    googleCalendar: 'Google Calendar',
-    notion: 'Notion',
-  };
-  if (confirm(`Connect ${names[key]}?\n\n(In the full version this opens OAuth login. For now it will mark as connected so you can see how the dashboard changes.)`)) {
-    connectIntegration(key);
-    renderAll();
-  }
-}
-
-/* ── SETTINGS ── */
+/* ══ SETTINGS ══ */
 function renderSettings() {
-  document.getElementById('settings-first').value = userData.firstName || '';
-  document.getElementById('settings-last').value = userData.lastName || '';
-  document.getElementById('settings-email').value = currentUser.email || '';
-  document.getElementById('settings-grade').value = userData.grade || '11';
-  renderClassList();
+  document.getElementById('set-first').value = userData.firstName || '';
+  document.getElementById('set-last').value = userData.lastName || '';
+  document.getElementById('set-email').value = currentUser.email || '';
+  document.getElementById('set-grade').value = userData.grade || '11';
+  renderSettingsClassList();
 }
 
-function renderClassList() {
+function renderSettingsClassList() {
   const classes = getClasses();
-  document.getElementById('class-list').innerHTML = classes.length
+  document.getElementById('settings-class-list').innerHTML = classes.length
     ? classes.map(c => `
-      <div class="class-item">
+      <div class="class-row">
         <div class="class-dot" style="background:${c.color}"></div>
-        <span class="class-name">${escHtml(c.name)}</span>
-        <span style="font-size:11px;color:var(--ink3)">${c.grade}%</span>
-        <button class="class-remove" onclick="removeClassItem('${c.name.replace(/'/g,"\\'")}');renderClassList();renderGrades();renderAssignments()">×</button>
+        <span class="class-name-text">${escHtml(c.name)}</span>
+        <button class="row-remove" onclick="removeClassItem('${c.id}');renderAll()" title="Remove class">×</button>
       </div>`).join('')
-    : `<p style="font-size:12px;color:var(--ink3);padding:8px 0">No classes yet. Add one below!</p>`;
+    : `<p style="font-size:12px;color:var(--ink3);padding:6px 0">No classes yet.</p>`;
 }
 
-function addClassFromSettings() {
+function addNewClass() {
   const name = document.getElementById('new-class-name').value.trim();
   const color = document.getElementById('new-class-color').value;
-  const gradeVal = parseInt(document.getElementById('new-class-grade').value) || 85;
   if (!name) return;
-  if (getClasses().find(c => c.name === name)) return;
-  addClassItem({ name, color, grade: gradeVal });
+  if (getClasses().find(c => c.name.toLowerCase() === name.toLowerCase())) {
+    alert('A class with that name already exists.'); return;
+  }
+  addClassItem({ name, color });
   document.getElementById('new-class-name').value = '';
-  document.getElementById('new-class-grade').value = '85';
-  renderClassList();
-  renderGrades();
+  renderSettingsClassList();
+  rebuildAllClassFilters();
 }
 
-function saveSettings() {
-  const first = document.getElementById('settings-first').value.trim();
-  const last = document.getElementById('settings-last').value.trim();
-  const grade = document.getElementById('settings-grade').value;
+function saveProfile() {
+  const first = document.getElementById('set-first').value.trim();
+  const last  = document.getElementById('set-last').value.trim();
+  const grade = document.getElementById('set-grade').value;
   if (!first || !last) return;
   updateProfile(first, last, grade);
   renderSidebar();
   renderOverview();
-  const msg = document.getElementById('settings-msg');
-  msg.textContent = 'Changes saved!';
+  const msg = document.getElementById('set-msg');
+  msg.textContent = 'Saved!';
   msg.classList.remove('hidden');
-  setTimeout(() => msg.classList.add('hidden'), 2500);
+  setTimeout(() => msg.classList.add('hidden'), 2000);
 }
 
-/* ── PAGE SWITCHING ── */
-function showPage(id, el) {
+/* ══ MODALS ══ */
+function openModal(name) {
+  if (name === 'add-assignment') {
+    rebuildClassSelect('m-asn-class');
+    if (!getClasses().length) { alert('Add classes in Settings first!'); return; }
+    const d = new Date(); d.setDate(d.getDate()+1);
+    document.getElementById('m-asn-due').value = d.toISOString().slice(0,10);
+    document.getElementById('m-asn-title').value = '';
+  }
+  if (name === 'add-block') {
+    rebuildClassSelect('m-sch-class');
+    if (!getClasses().length) { alert('Add classes in Settings first!'); return; }
+  }
+  if (name === 'add-grade') {
+    rebuildClassSelect('m-grd-class');
+    if (!getClasses().length) { alert('Add classes in Settings first!'); return; }
+    document.getElementById('m-grd-date').value = todayISO();
+    document.getElementById('m-grd-earned').value = '';
+    document.getElementById('m-grd-preview').style.display = 'none';
+    rebuildAssignmentSelect();
+    document.getElementById('m-grd-title-group').style.display = 'flex';
+    // Live preview
+    ['m-grd-earned','m-grd-possible'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateGradePreview);
+    });
+  }
+  if (name === 'log-attendance') {
+    document.getElementById('m-att-date').value = todayISO();
+    buildAttendanceClassList();
+  }
+  document.getElementById('modal-' + name).classList.remove('hidden');
+}
+
+function closeModal(name) {
+  document.getElementById('modal-' + name).classList.add('hidden');
+}
+function closeModalClick(e, name) {
+  if (e.target === document.getElementById('modal-' + name)) closeModal(name);
+}
+
+function rebuildClassSelect(selectId) {
+  const sel = document.getElementById(selectId);
+  const classes = getClasses();
+  sel.innerHTML = classes.length
+    ? classes.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('')
+    : '<option value="">No classes — add in Settings</option>';
+}
+
+function rebuildAssignmentSelect() {
+  const sel = document.getElementById('m-grd-assignment');
+  const ungradedAsn = getAssignments().filter(a => a.status !== 'graded');
+  sel.innerHTML = `<option value="">— pick an assignment —</option>
+    ${ungradedAsn.map(a => `<option value="${a.id}">${escHtml(a.title)} (${escHtml(a.className)})</option>`).join('')}
+    <option value="__new__">Enter manually</option>`;
+  sel.onchange = () => {
+    const val = sel.value;
+    const titleGroup = document.getElementById('m-grd-title-group');
+    if (val === '__new__' || val === '') {
+      titleGroup.style.display = 'flex';
+      document.getElementById('m-grd-title').value = '';
+    } else {
+      titleGroup.style.display = 'none';
+      const asn = getAssignments().find(a => a.id === val);
+      if (asn) {
+        document.getElementById('m-grd-class').value = asn.classId;
+        document.getElementById('m-grd-title').value = asn.title;
+      }
+    }
+  };
+}
+
+function updateGradePreview() {
+  const earned = parseFloat(document.getElementById('m-grd-earned').value);
+  const possible = parseFloat(document.getElementById('m-grd-possible').value);
+  const prev = document.getElementById('m-grd-preview');
+  if (!isNaN(earned) && !isNaN(possible) && possible > 0) {
+    const pct = Math.round((earned/possible)*1000)/10;
+    const [letter] = gradeLabel(pct);
+    prev.style.display = 'block';
+    prev.textContent = `${earned} / ${possible} = ${pct}%  ·  ${letter}`;
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+function buildAttendanceClassList() {
+  const classes = getClasses();
+  document.getElementById('m-att-classes').innerHTML = classes.length
+    ? `<div class="card-title" style="margin-bottom:10px">Mark each class:</div>` +
+      classes.map(c => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:13px;display:flex;align-items:center;gap:8px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${c.color};flex-shrink:0"></span>
+            ${escHtml(c.name)}
+          </span>
+          <div style="display:flex;gap:6px">
+            <button id="att-p-${c.id}" onclick="setAttBtn('${c.id}',true)" style="padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--green-border);background:var(--green-soft);color:var(--green);cursor:pointer;font-family:var(--font);font-weight:500">Present</button>
+            <button id="att-a-${c.id}" onclick="setAttBtn('${c.id}',false)" style="padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--border2);background:none;color:var(--ink3);cursor:pointer;font-family:var(--font)">Absent</button>
+          </div>
+        </div>`).join('')
+    : '<p style="font-size:12px;color:var(--ink3)">Add classes in Settings first.</p>';
+}
+
+function setAttBtn(classId, present) {
+  const pBtn = document.getElementById('att-p-' + classId);
+  const aBtn = document.getElementById('att-a-' + classId);
+  if (!pBtn || !aBtn) return;
+  if (present) {
+    pBtn.style.cssText = 'padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--green);background:var(--green);color:#fff;cursor:pointer;font-family:var(--font);font-weight:500';
+    aBtn.style.cssText = 'padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--border2);background:none;color:var(--ink3);cursor:pointer;font-family:var(--font)';
+  } else {
+    aBtn.style.cssText = 'padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--red);background:var(--red);color:#fff;cursor:pointer;font-family:var(--font);font-weight:500';
+    pBtn.style.cssText = 'padding:5px 12px;font-size:11px;border-radius:6px;border:1px solid var(--border2);background:none;color:var(--ink3);cursor:pointer;font-family:var(--font)';
+  }
+  pBtn.dataset.selected = present ? 'true' : '';
+  aBtn.dataset.selected = !present ? 'true' : '';
+}
+
+/* ══ SAVE MODALS ══ */
+function saveAssignmentModal() {
+  const title  = document.getElementById('m-asn-title').value.trim();
+  const classId = document.getElementById('m-asn-class').value;
+  const due    = document.getElementById('m-asn-due').value;
+  const type   = document.getElementById('m-asn-type').value;
+  const status = document.getElementById('m-asn-status').value;
+  if (!title || !classId || !due) { alert('Please fill in title, class, and due date.'); return; }
+  addAssignment({ title, classId, due, type, status });
+  closeModal('add-assignment');
+  renderAll();
+}
+
+function saveScheduleBlock() {
+  const classId   = document.getElementById('m-sch-class').value;
+  const day       = document.getElementById('m-sch-day').value;
+  const startTime = document.getElementById('m-sch-start').value;
+  const endTime   = document.getElementById('m-sch-end').value;
+  const room      = document.getElementById('m-sch-room').value.trim();
+  if (!classId || !day || !startTime || !endTime) return;
+  const cls = getClassById(classId);
+  addScheduleBlock({ classId, className: cls ? cls.name : '', day, startTime, endTime, room });
+  closeModal('add-block');
+  renderSchedule();
+  renderOverview();
+}
+
+function saveGradeModal() {
+  const asnSel   = document.getElementById('m-grd-assignment').value;
+  const classId  = document.getElementById('m-grd-class').value;
+  const earned   = parseFloat(document.getElementById('m-grd-earned').value);
+  const possible = parseFloat(document.getElementById('m-grd-possible').value);
+  const category = document.getElementById('m-grd-category').value;
+  const date     = document.getElementById('m-grd-date').value;
+  let title      = document.getElementById('m-grd-title').value.trim();
+
+  if (!classId || isNaN(earned) || isNaN(possible) || possible <= 0) {
+    alert('Please fill in class, earned points, and possible points.'); return;
+  }
+  if (!title) {
+    const asn = asnSel && asnSel !== '__new__' ? getAssignments().find(a => a.id === asnSel) : null;
+    title = asn ? asn.title : 'Untitled';
+  }
+
+  addGradeEntry({
+    classId, title, earned, possible, category, date,
+    assignmentId: (asnSel && asnSel !== '__new__' && asnSel !== '') ? asnSel : null
+  });
+  closeModal('add-grade');
+  renderGrades();
+  renderOverview();
+}
+
+function saveAttendanceModal() {
+  const date = document.getElementById('m-att-date').value;
+  const classes = getClasses();
+  classes.forEach(c => {
+    const pBtn = document.getElementById('att-p-' + c.id);
+    const aBtn = document.getElementById('att-a-' + c.id);
+    if (!pBtn) return;
+    const pSelected = pBtn.dataset.selected === 'true';
+    const aSelected = aBtn.dataset.selected === 'true';
+    if (pSelected || aSelected) {
+      logAttendance(c.id, date, pSelected);
+    }
+  });
+  closeModal('log-attendance');
+  renderAttendance();
+  renderOverview();
+}
+
+/* ══ HELPERS ══ */
+function rebuildClassFilter(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = `<option value="all">All classes</option>` +
+    getClasses().map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+
+function rebuildAllClassFilters() {
+  rebuildClassFilter('asn-filter');
+  rebuildClassFilter('grade-class-filter');
+}
+
+function renderAll() {
+  renderOverview();
+  renderAssignments();
+  renderSchedule();
+  renderGrades();
+  renderAttendance();
+  renderSettings();
+  rebuildAllClassFilters();
+}
+
+function nav(id, el) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   if (el) el.classList.add('active');
-  if (id === 'attendance') setTimeout(initAttendChart, 80);
-  if (id === 'integrations') renderIntegrationsPage();
 }
 
-function setTab(el, show, hide) {
-  const tabs = el.parentElement.querySelectorAll('.tab');
-  tabs.forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById(show).classList.remove('hidden');
-  document.getElementById(hide).classList.add('hidden');
-}
-
-/* ── AI TUTOR ── */
+/* ══ AI TUTOR ══ */
 function quickAsk() {
   const v = document.getElementById('quick-input').value.trim();
   if (!v) return;
   document.getElementById('quick-input').value = '';
-  showPage('ai', document.querySelector('[data-page="ai"]'));
-  setTimeout(() => {
-    document.getElementById('ai-input').value = v;
-    sendAI();
-  }, 50);
+  nav('ai', document.querySelector('[data-page="ai"]'));
+  setTimeout(() => { document.getElementById('ai-input').value = v; sendAI(); }, 50);
 }
 
 function sendToChat(msg) {
-  showPage('ai', document.querySelector('[data-page="ai"]'));
-  setTimeout(() => {
-    document.getElementById('ai-input').value = msg;
-    sendAI();
-  }, 50);
+  nav('ai', document.querySelector('[data-page="ai"]'));
+  setTimeout(() => { document.getElementById('ai-input').value = msg; sendAI(); }, 50);
 }
 
 async function sendAI() {
@@ -486,40 +558,46 @@ async function sendAI() {
   if (!msg) return;
   input.value = '';
 
-  const messages = document.getElementById('ai-messages');
-  messages.innerHTML += `<div class="ai-msg user">${escHtml(msg)}</div>`;
-
-  const thinkId = 'think-' + Date.now();
-  messages.innerHTML += `<div class="ai-msg thinking" id="${thinkId}">Thinking…</div>`;
-  messages.scrollTop = messages.scrollHeight;
-
+  const msgs = document.getElementById('ai-messages');
+  msgs.innerHTML += `<div class="ai-msg user">${escHtml(msg)}</div>`;
+  const thinkId = 'tk' + Date.now();
+  msgs.innerHTML += `<div class="ai-msg thinking" id="${thinkId}">Thinking…</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
   aiHistory.push({ role: 'user', content: msg });
 
-  const classes = getClasses().map(c => `${c.name} (${c.grade}%)`).join(', ') || 'none added yet';
-  const assignments = getAssignments().filter(a=>a.status!=='submitted').map(a=>`${a.title} [${a.className}, due ${a.due}]`).join('; ') || 'none';
-  const systemPrompt = `You are Scholar's AI tutor for a student named ${currentUser.firstName}. Be warm, concise, and encouraging. Their classes: ${classes}. Upcoming assignments: ${assignments}. Help with studying, homework, and school questions. Keep responses clear and focused. No markdown.`;
+  const classes = getClasses().map(c => {
+    const pct = computeClassGrade(c.id);
+    return `${c.name}${pct !== null ? ' (' + pct + '%)' : ''}`;
+  }).join(', ') || 'none added yet';
+
+  const assignments = getAssignments()
+    .filter(a => a.status !== 'graded')
+    .sort((a,b) => a.due.localeCompare(b.due))
+    .slice(0, 10)
+    .map(a => `${a.title} [${a.className}, due ${a.due}, ${a.status}]`)
+    .join('; ') || 'none';
+
+  const todaySched = getTodaySchedule().map(b => `${b.className} ${formatTime(b.startTime)}-${formatTime(b.endTime)}`).join(', ') || 'nothing scheduled';
+  const name = userData.firstName || currentUser.firstName || 'Student';
+
+  const system = `You are Scholar's AI tutor for ${name} (${formatGrade(userData.grade||'')}). Be warm, encouraging, and concise. Their classes with current grades: ${classes}. Upcoming assignments: ${assignments}. Today's schedule: ${todaySched}. Help with studying, homework questions, and school planning. Keep responses focused. No markdown formatting.`;
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        system: systemPrompt,
-        messages: aiHistory.slice(-10)
-      })
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, system, messages: aiHistory.slice(-12) })
     });
     const data = await res.json();
-    const reply = data.content?.find(b=>b.type==='text')?.text || "Sorry, I couldn't respond. Try again!";
+    const reply = data.content?.find(b => b.type === 'text')?.text || "Sorry, I couldn't respond. Try again!";
     aiHistory.push({ role: 'assistant', content: reply });
     document.getElementById(thinkId)?.remove();
-    messages.innerHTML += `<div class="ai-msg assistant">${escHtml(reply)}</div>`;
+    msgs.innerHTML += `<div class="ai-msg assistant">${escHtml(reply)}</div>`;
   } catch(e) {
     document.getElementById(thinkId)?.remove();
-    messages.innerHTML += `<div class="ai-msg assistant">Couldn't connect right now. Make sure you're online!</div>`;
+    msgs.innerHTML += `<div class="ai-msg assistant">Connection issue — check you're online and try again.</div>`;
   }
-  messages.scrollTop = messages.scrollHeight;
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
 function escHtml(s) {

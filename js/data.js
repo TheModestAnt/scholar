@@ -1,4 +1,5 @@
-/* ── SCHOLAR DATA LAYER ── */
+/* ── SCHOLAR DATA LAYER v3 ── */
+/* All data lives in localStorage under the user's email key */
 
 let currentUser = null;
 let userData = null;
@@ -8,6 +9,12 @@ function initData() {
   if (!currentUser) return;
   const users = getUsers();
   userData = users[currentUser.email];
+  // Migrate old accounts missing new fields
+  if (!userData.assignments) userData.assignments = [];
+  if (!userData.classes) userData.classes = [];
+  if (!userData.schedule) userData.schedule = [];      // [{day,startTime,endTime,className,room}]
+  if (!userData.attendance) userData.attendance = {};   // {classId: [{date, present}]}
+  if (!userData.gradeEntries) userData.gradeEntries = []; // [{id,classId,title,earned,possible,date,category}]
   updateStreak();
 }
 
@@ -20,70 +27,168 @@ function saveUserData() {
 function updateStreak() {
   const last = userData.lastLogin || 0;
   const now = Date.now();
-  const dayMs = 86400000;
-  const daysSince = Math.floor((now - last) / dayMs);
+  const daysSince = Math.floor((now - last) / 86400000);
   if (daysSince === 1) userData.streak = (userData.streak || 1) + 1;
   else if (daysSince > 1) userData.streak = 1;
   userData.lastLogin = now;
   saveUserData();
 }
 
-/* ── INTEGRATIONS ── */
-function getIntegrations() {
-  return userData.integrations || {
-    googleClassroom: false,
-    googleDocs: false,
-    notion: false,
-    googleCalendar: false
-  };
-}
-
-function connectIntegration(key) {
-  userData.integrations = getIntegrations();
-  userData.integrations[key] = true;
-  saveUserData();
-}
-
-function disconnectIntegration(key) {
-  userData.integrations = getIntegrations();
-  userData.integrations[key] = false;
-  saveUserData();
-}
-
-function anyConnected() {
-  const i = getIntegrations();
-  return i.googleClassroom || i.googleDocs || i.notion || i.googleCalendar;
-}
-
 /* ── CLASSES ── */
 function getClasses() { return userData.classes || []; }
 
 function addClassItem(cls) {
-  userData.classes = userData.classes || [];
+  cls.id = cls.id || 'cls_' + Date.now();
   userData.classes.push(cls);
+  saveUserData();
+  return cls;
+}
+
+function removeClassItem(id) {
+  userData.classes = userData.classes.filter(c => c.id !== id);
+  // Also clean up related data
+  userData.assignments = userData.assignments.filter(a => a.classId !== id);
+  userData.gradeEntries = userData.gradeEntries.filter(g => g.classId !== id);
+  if (userData.attendance[id]) delete userData.attendance[id];
+  userData.schedule = userData.schedule.filter(s => s.classId !== id);
   saveUserData();
 }
 
-function removeClassItem(name) {
-  userData.classes = userData.classes.filter(c => c.name !== name);
+function getClassById(id) { return getClasses().find(c => c.id === id); }
+
+/* ── SCHEDULE ── */
+function getSchedule() { return userData.schedule || []; }
+
+function addScheduleBlock(block) {
+  block.id = 'sch_' + Date.now();
+  userData.schedule.push(block);
   saveUserData();
+  return block;
+}
+
+function removeScheduleBlock(id) {
+  userData.schedule = userData.schedule.filter(s => s.id !== id);
+  saveUserData();
+}
+
+function getScheduleForDay(day) {
+  return getSchedule()
+    .filter(s => s.day === day)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+}
+
+function getTodaySchedule() {
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const today = days[new Date().getDay()];
+  return getScheduleForDay(today);
 }
 
 /* ── ASSIGNMENTS ── */
 function getAssignments() { return userData.assignments || []; }
 
 function addAssignment(a) {
-  userData.assignments = userData.assignments || [];
-  a.id = Date.now();
-  const cls = getClasses().find(c => c.name === a.className);
+  a.id = 'asn_' + Date.now();
+  const cls = getClassById(a.classId);
   a.color = cls ? cls.color : '#888';
+  a.className = cls ? cls.name : a.className || '';
   userData.assignments.push(a);
   saveUserData();
+  return a;
+}
+
+function updateAssignment(id, changes) {
+  const idx = userData.assignments.findIndex(a => a.id === id);
+  if (idx >= 0) {
+    userData.assignments[idx] = { ...userData.assignments[idx], ...changes };
+    saveUserData();
+  }
 }
 
 function removeAssignment(id) {
   userData.assignments = userData.assignments.filter(a => a.id !== id);
   saveUserData();
+}
+
+function countDueSoon() {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const week = new Date(now.getTime() + 7 * 86400000);
+  return getAssignments().filter(a => {
+    if (a.status === 'submitted' || a.status === 'graded') return false;
+    const d = new Date(a.due + 'T00:00:00');
+    return d >= now && d <= week;
+  }).length;
+}
+
+/* ── GRADE ENTRIES ── */
+function getGradeEntries() { return userData.gradeEntries || []; }
+
+function addGradeEntry(entry) {
+  entry.id = 'grd_' + Date.now();
+  userData.gradeEntries.push(entry);
+  // Also update assignment status to graded
+  if (entry.assignmentId) {
+    updateAssignment(entry.assignmentId, { status: 'graded', earned: entry.earned, possible: entry.possible });
+  }
+  saveUserData();
+  return entry;
+}
+
+function removeGradeEntry(id) {
+  userData.gradeEntries = userData.gradeEntries.filter(g => g.id !== id);
+  saveUserData();
+}
+
+function getGradeEntriesForClass(classId) {
+  return getGradeEntries().filter(g => g.classId === classId);
+}
+
+function computeClassGrade(classId) {
+  const entries = getGradeEntriesForClass(classId);
+  if (!entries.length) return null;
+  const totalEarned = entries.reduce((s, e) => s + (Number(e.earned) || 0), 0);
+  const totalPossible = entries.reduce((s, e) => s + (Number(e.possible) || 0), 0);
+  if (!totalPossible) return null;
+  return Math.round((totalEarned / totalPossible) * 1000) / 10;
+}
+
+function computeGPA() {
+  const classes = getClasses();
+  if (!classes.length) return '—';
+  const grades = classes.map(c => computeClassGrade(c.id)).filter(g => g !== null);
+  if (!grades.length) return '—';
+  const avg = grades.reduce((s, g) => s + g, 0) / grades.length;
+  return (Math.round((avg / 100) * 4.3 * 10) / 10).toFixed(1);
+}
+
+/* ── ATTENDANCE ── */
+function getAttendanceForClass(classId) {
+  return userData.attendance[classId] || [];
+}
+
+function logAttendance(classId, date, present) {
+  if (!userData.attendance[classId]) userData.attendance[classId] = [];
+  const existing = userData.attendance[classId].findIndex(a => a.date === date);
+  if (existing >= 0) {
+    userData.attendance[classId][existing].present = present;
+  } else {
+    userData.attendance[classId].push({ date, present });
+  }
+  saveUserData();
+}
+
+function getAttendanceRate(classId) {
+  const records = getAttendanceForClass(classId);
+  if (!records.length) return null;
+  const present = records.filter(r => r.present).length;
+  return Math.round((present / records.length) * 100);
+}
+
+function getOverallAttendanceRate() {
+  const classes = getClasses();
+  if (!classes.length) return null;
+  const rates = classes.map(c => getAttendanceRate(c.id)).filter(r => r !== null);
+  if (!rates.length) return null;
+  return Math.round(rates.reduce((s,r) => s+r, 0) / rates.length);
 }
 
 /* ── PROFILE ── */
@@ -98,98 +203,66 @@ function updateProfile(first, last, grade) {
   saveUserData();
 }
 
-/* ── COMPUTED ── */
-function computeGPA() {
-  const classes = getClasses();
-  if (!classes.length) return '—';
-  const avg = classes.reduce((s, c) => s + (c.grade || 0), 0) / classes.length;
-  return Math.round((avg / 100) * 4.3 * 10) / 10;
+/* ── HELPERS ── */
+function formatDue(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr + 'T00:00:00');
+  const now = new Date(); now.setHours(0,0,0,0);
+  const diff = Math.round((d - now) / 86400000);
+  if (diff < -1) return `${Math.abs(diff)}d overdue`;
+  if (diff === -1) return 'Yesterday';
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Tomorrow';
+  if (diff < 7) return `${diff}d`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function countDueSoon() {
-  const now = new Date();
-  const week = new Date(now.getTime() + 7 * 86400000);
-  return getAssignments().filter(a => {
-    if (a.status === 'submitted') return false;
-    const d = new Date(a.due + 'T00:00:00');
-    return d >= now && d <= week;
-  }).length;
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function gradeLabel(pct) {
+  if (pct === null || pct === undefined) return ['—', 'badge-gray'];
   if (pct >= 97) return ['A+', 'badge-green'];
   if (pct >= 93) return ['A',  'badge-green'];
   if (pct >= 90) return ['A−', 'badge-blue'];
   if (pct >= 87) return ['B+', 'badge-amber'];
   if (pct >= 83) return ['B',  'badge-amber'];
   if (pct >= 80) return ['B−', 'badge-amber'];
-  return ['C', 'badge-gray'];
+  if (pct >= 77) return ['C+', 'badge-gray'];
+  return ['C or below', 'badge-red'];
 }
 
 function statusBadge(s) {
   return {
-    'submitted':   ['Submitted',   'badge-green'],
-    'in-progress': ['In Progress', 'badge-blue'],
+    'graded':      ['Graded',      'badge-green'],
+    'submitted':   ['Submitted',   'badge-blue'],
+    'in-progress': ['In Progress', 'badge-amber'],
     'not-started': ['Not Started', 'badge-gray'],
   }[s] || ['Unknown', 'badge-gray'];
 }
 
-function formatDue(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  const now = new Date(); now.setHours(0,0,0,0);
-  const diff = Math.round((d - now) / 86400000);
-  if (diff < 0) return 'Past due';
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Tomorrow';
-  if (diff < 7) return `In ${diff} days`;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 function formatGrade(g) {
-  return {
-    '6':'6th Grade','7':'7th Grade','8':'8th Grade',
-    '9':'9th Grade','10':'10th Grade','11':'11th Grade','12':'12th Grade',
-    'college-1':'College · Year 1','college-2':'College · Year 2',
-    'college-3':'College · Year 3','college-4':'College · Year 4',
-  }[g] || `Grade ${g}`;
+  return {'6':'6th','7':'7th','8':'8th','9':'9th','10':'10th','11':'11th','12':'12th',
+    'college-1':'College Y1','college-2':'College Y2','college-3':'College Y3','college-4':'College Y4'}[g] || g;
 }
 
-/* ── STATIC DEMO DATA (only shown when integrations not connected) ── */
-const DEMO_SCHEDULE = [
-  { time: '8:15 am', title: 'AP Physics', sub: 'Room 204', color: '#4f6ef7' },
-  { time: '10:00 am', title: 'Senior Seminar', sub: 'Library', color: '#16a34a' },
-  { time: '1:00 pm', title: 'AP Calculus', sub: 'Room 118', color: '#7c3aed' },
-  { time: '3:30 pm', title: 'Art Studio', sub: 'Elective', color: '#d97706' },
+function formatTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'pm' : 'am';
+  return `${h % 12 || 12}:${m.toString().padStart(2,'0')} ${ampm}`;
+}
+
+const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DAYS_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+const GRADE_COLORS = [
+  '#4f6ef7','#16a34a','#7c3aed','#d97706','#e91e8c',
+  '#0891b2','#dc2626','#65a30d','#9333ea','#ea580c'
 ];
-
-const DEMO_EVENTS = [
-  { date: 'Apr 7', title: 'Animation Essay Draft', sub: 'Senior Seminar', color: '#16a34a' },
-  { date: 'Apr 10', title: 'WWI Source Analysis', sub: 'World History', color: '#d97706' },
-  { date: 'Apr 15', title: 'AP Calculus Midterm', sub: 'Room 118 · 7:30am', color: '#7c3aed' },
-  { date: 'Apr 22', title: 'Art Show Opening', sub: 'Main Gallery · 6pm', color: '#e91e8c' },
-];
-
-const DEMO_GDOCS = [
-  { icon: '📄', title: 'Sample Essay Draft', meta: 'Connect Google Docs to see your real files', badge: 'Example', badgeCls: 'badge-gray' },
-  { icon: '📊', title: 'Sample Lab Report', meta: 'Connect Google Docs to see your real files', badge: 'Example', badgeCls: 'badge-gray' },
-];
-
-const DEMO_NOTION = [
-  { icon: '📋', title: 'Sample Notes Page', meta: 'Connect Notion to see your real pages', tag: 'Example' },
-];
-
-const GRADE_TREND = {
-  months: ['Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'],
-  datasets: [
-    { label: 'Physics',   data: [88,89,90,91,90,92,91,91], color: '#4f6ef7' },
-    { label: 'Calculus',  data: [80,81,82,84,83,84,84,84], color: '#7c3aed' },
-    { label: 'Art',       data: [95,96,97,98,97,98,98,98], color: '#e91e8c' },
-    { label: 'English',   data: [84,85,86,87,87,87,88,87], color: '#16a34a' },
-  ]
-};
-
-const ATTENDANCE_DATA = {
-  months: ['Sep','Oct','Nov','Dec','Jan','Feb','Mar'],
-  present: [20,21,19,18,20,20,20],
-  absent:  [0, 0, 1, 0, 0, 1, 0],
-};
