@@ -536,6 +536,10 @@ function nav(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   if (el) el.classList.add('active');
+  if (id === 'integrations') renderIntegrationsPage();
+  if (id === 'attendance') setTimeout(initAttendChart, 80);
+  if (id === 'documents') renderDocumentsReal();
+  if (id === 'calendar' && isGoogleConnected()) renderCalendarReal();
 }
 
 /* ══ AI TUTOR ══ */
@@ -603,4 +607,150 @@ async function sendAI() {
 function escHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ══ INTEGRATIONS PAGE (real) ══ */
+function renderIntegrationsPage() {
+  const googleConn = isGoogleConnected();
+  const notionConn = isNotionConnected();
+
+  document.getElementById('integrations-grid').innerHTML = `
+    <div class="integration-card${googleConn ? ' connected' : ''}">
+      <div class="int-left">
+        <div class="int-icon">🎓</div>
+        <div>
+          <div class="int-name">Google Classroom</div>
+          <div class="int-status${googleConn ? ' live' : ''}">${googleConn ? '● Synced — courses & assignments imported' : 'Import courses and assignments'}</div>
+        </div>
+      </div>
+      ${googleConn
+        ? `<button class="btn-secondary" style="font-size:11px" onclick="disconnectGoogle()">Disconnect</button>`
+        : `<button class="connect-btn" onclick="connectGoogle()">Connect →</button>`}
+    </div>
+
+    <div class="integration-card${googleConn ? ' connected' : ''}">
+      <div class="int-left">
+        <div class="int-icon">📄</div>
+        <div>
+          <div class="int-name">Google Docs</div>
+          <div class="int-status${googleConn ? ' live' : ''}">${googleConn ? '● Live — recent docs synced' : 'Access your documents'}</div>
+        </div>
+      </div>
+      ${googleConn
+        ? `<button class="btn-secondary" style="font-size:11px" onclick="disconnectGoogle()">Disconnect</button>`
+        : `<button class="connect-btn" onclick="connectGoogle()">Connect →</button>`}
+    </div>
+
+    <div class="integration-card${googleConn ? ' connected' : ''}">
+      <div class="int-left">
+        <div class="int-icon">📅</div>
+        <div>
+          <div class="int-name">Google Calendar</div>
+          <div class="int-status${googleConn ? ' live' : ''}">${googleConn ? '● Live — next 30 days synced' : 'See your schedule and events'}</div>
+        </div>
+      </div>
+      ${googleConn
+        ? `<button class="btn-secondary" style="font-size:11px" onclick="disconnectGoogle()">Disconnect</button>`
+        : `<button class="connect-btn" onclick="connectGoogle()">Connect →</button>`}
+    </div>
+
+    <div class="integration-card${notionConn ? ' connected' : ''}">
+      <div class="int-left">
+        <div class="int-icon">◈</div>
+        <div>
+          <div class="int-name">Notion</div>
+          <div class="int-status${notionConn ? ' live' : ''}">${notionConn ? '● Live — pages and databases synced' : 'Browse your notes and pages'}</div>
+        </div>
+      </div>
+      ${notionConn
+        ? `<button class="btn-secondary" style="font-size:11px" onclick="disconnectNotion()">Disconnect</button>`
+        : `<button class="connect-btn" onclick="connectNotion()">Connect →</button>`}
+    </div>`;
+
+  // Sync button
+  if (googleConn || notionConn) {
+    document.getElementById('sync-btn-wrap').innerHTML =
+      `<button class="btn-secondary" onclick="syncAll()">↻ Sync now</button>`;
+  }
+}
+
+async function syncAll() {
+  showToast('Syncing…');
+  if (isGoogleConnected()) await loadGoogleData();
+  if (isNotionConnected()) await loadNotionPages();
+  renderAll();
+  showToast('All data synced!');
+}
+
+/* ══ OVERRIDE CALENDAR with real events ══ */
+function renderCalendarReal() {
+  const events = getCalendarEvents();
+  const el = document.getElementById('event-list');
+  if (!el) return;
+
+  const upcoming = events
+    .filter(e => new Date(e.start) >= new Date())
+    .slice(0, 8);
+
+  if (!upcoming.length) {
+    // Fall back to assignment-based calendar
+    renderCalendar();
+    return;
+  }
+
+  el.innerHTML = upcoming.map(e => {
+    const d = new Date(e.start);
+    const label = e.allDay
+      ? d.toLocaleDateString('en-US', { month:'short', day:'numeric' })
+      : d.toLocaleDateString('en-US', { month:'short', day:'numeric' }) + ' · ' +
+        d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+    return `<div class="event-item">
+      <div class="event-time">${label}</div>
+      <div class="event-dot" style="background:var(--accent)"></div>
+      <div>
+        <div class="event-title">${escHtml(e.title)}</div>
+        ${e.location ? `<div class="event-sub">${escHtml(e.location)}</div>` : ''}
+      </div>
+      ${e.link ? `<a href="${e.link}" target="_blank" style="font-size:11px;color:var(--accent);text-decoration:none;margin-left:auto;flex-shrink:0">Open ↗</a>` : ''}
+    </div>`;
+  }).join('');
+}
+
+/* ══ OVERRIDE DOCUMENTS with real data ══ */
+function renderDocumentsReal() {
+  const docs = getGoogleDocs();
+  const gdocsEl = document.getElementById('gdocs-list');
+  if (gdocsEl) {
+    if (docs.length) {
+      gdocsEl.innerHTML = docs.map(d => `
+        <div class="doc-item" onclick="window.open('${d.link}','_blank')">
+          <div class="doc-icon">📄</div>
+          <div style="flex:1;min-width:0">
+            <div class="doc-title">${escHtml(d.title)}</div>
+            <div class="doc-meta">Edited ${formatRelativeTime(d.modified)}</div>
+          </div>
+          <span style="font-size:11px;color:var(--accent)">Open ↗</span>
+        </div>`).join('');
+    } else if (isGoogleConnected()) {
+      gdocsEl.innerHTML = `<div class="empty-state"><div class="empty-icon">📄</div><p>No Google Docs found in your Drive.</p></div>`;
+    }
+  }
+
+  const notionPages = getNotionPages();
+  const notionEl = document.getElementById('notion-list');
+  if (notionEl) {
+    if (notionPages.length) {
+      notionEl.innerHTML = notionPages.map(p => `
+        <div class="doc-item" onclick="window.open('${p.link}','_blank')">
+          <div class="doc-icon">${p.icon}</div>
+          <div style="flex:1;min-width:0">
+            <div class="doc-title">${escHtml(p.title)}</div>
+            <div class="doc-meta">${p.type === 'database' ? 'Database' : 'Page'} · Edited ${formatRelativeTime(p.edited)}</div>
+          </div>
+          <span style="font-size:11px;color:var(--accent)">Open ↗</span>
+        </div>`).join('');
+    } else if (isNotionConnected()) {
+      notionEl.innerHTML = `<div class="empty-state"><div class="empty-icon">◈</div><p>No Notion pages found.<br>Make sure you've shared pages with the Scholar integration in Notion.</p></div>`;
+    }
+  }
 }
