@@ -169,3 +169,25 @@
   .grid2, .grid3 { grid-template-columns: 1fr; }
   .schedule-week { grid-template-columns: repeat(3,1fr); }
 }
+
+/* INTEGRATION CARDS */
+.integration-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.integration-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.integration-card.connected { border-color: var(--green-border); background: var(--green-soft); }
+.int-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.int-icon { font-size: 22px; flex-shrink: 0; }
+.int-name { font-size: 13px; font-weight: 500; color: var(--ink); }
+.int-status { font-size: 11px; color: var(--ink3); margin-top: 2px; }
+.int-status.live { color: var(--green); font-weight: 500; }
+.connect-btn { padding: 6px 12px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border); border-radius: var(--r-sm); font-family: var(--font); font-size: 11px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: all .15s; flex-shrink: 0; }
+.connect-btn:hover { background: var(--accent); color: #fff; }
+.doc-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.doc-item:last-child { border-bottom: none; }
+.doc-item:hover .doc-title { color: var(--accent); }
+.doc-icon { font-size: 18px; width: 28px; text-align: center; flex-shrink: 0; }
+.doc-title { font-size: 13px; color: var(--ink); transition: color .12s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-meta { font-size: 11px; color: var(--ink3); margin-top: 1px; }
+.event-title { font-size: 13px; color: var(--ink); }
+.event-sub { font-size: 11px; color: var(--ink3); margin-top: 1px; }
+.event-time { font-size: 11px; color: var(--ink3); min-width: 80px; padding-top: 2px; flex-shrink: 0; }
+.event-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
