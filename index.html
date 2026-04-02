@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scholar — Your Academic Hub</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+</head>
+<body class="auth-page">
+
+  <div class="auth-split">
+    <!-- Left panel -->
+    <div class="auth-brand">
+      <div class="auth-brand-inner">
+        <div class="brand-logo">
+          <span class="brand-mark">◈</span>
+          <span class="brand-name">Scholar</span>
+        </div>
+        <h1 class="brand-tagline">Your academic life,<br><em>beautifully organized.</em></h1>
+        <div class="brand-features">
+          <div class="brand-feat"><span class="feat-icon">✦</span> Grades & GPA trends over time</div>
+          <div class="brand-feat"><span class="feat-icon">▣</span> Calendar synced to your schedule</div>
+          <div class="brand-feat"><span class="feat-icon">▦</span> Attendance tracker per class</div>
+          <div class="brand-feat"><span class="feat-icon">▤</span> Google Docs & Notion workspace</div>
+          <div class="brand-feat"><span class="feat-icon">✧</span> AI Tutor for homework help</div>
+        </div>
+        <p class="brand-note">Free for students. No ads. Ever.</p>
+      </div>
+    </div>
+
+    <!-- Right panel: auth forms -->
+    <div class="auth-form-panel">
+      <div class="auth-form-wrap">
+
+        <!-- Tab switcher -->
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Sign in</button>
+          <button class="auth-tab" id="tab-signup" onclick="switchTab('signup')">Create account</button>
+        </div>
+
+        <!-- LOGIN FORM -->
+        <div id="form-login" class="auth-form active">
+          <h2 class="form-title">Welcome back</h2>
+          <p class="form-sub">Sign in to your Scholar account</p>
+
+          <div class="field-group">
+            <label>Email</label>
+            <input type="email" id="login-email" placeholder="you@school.edu" autocomplete="email">
+          </div>
+          <div class="field-group">
+            <label>Password</label>
+            <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+          </div>
+
+          <div id="login-error" class="form-error hidden"></div>
+
+          <button class="btn-primary" onclick="handleLogin()">Sign in →</button>
+
+          <p class="form-switch">No account? <a href="#" onclick="switchTab('signup')">Create one free</a></p>
+
+          <div class="demo-box">
+            <p class="demo-label">Try the demo</p>
+            <button class="btn-demo" onclick="loadDemo()">Sign in as Demo Student</button>
+          </div>
+        </div>
+
+        <!-- SIGNUP FORM -->
+        <div id="form-signup" class="auth-form">
+          <h2 class="form-title">Create your account</h2>
+          <p class="form-sub">Set up Scholar in under a minute</p>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label>First name</label>
+              <input type="text" id="signup-first" placeholder="Eden" autocomplete="given-name">
+            </div>
+            <div class="field-group">
+              <label>Last name</label>
+              <input type="text" id="signup-last" placeholder="Smith" autocomplete="family-name">
+            </div>
+          </div>
+          <div class="field-group">
+            <label>Email</label>
+            <input type="email" id="signup-email" placeholder="you@school.edu" autocomplete="email">
+          </div>
+          <div class="field-group">
+            <label>Grade / Year</label>
+            <select id="signup-grade">
+              <option value="">Select grade…</option>
+              <option value="6">6th Grade</option>
+              <option value="7">7th Grade</option>
+              <option value="8">8th Grade</option>
+              <option value="9">9th Grade (Freshman)</option>
+              <option value="10">10th Grade (Sophomore)</option>
+              <option value="11">11th Grade (Junior)</option>
+              <option value="12">12th Grade (Senior)</option>
+              <option value="college-1">College · Year 1</option>
+              <option value="college-2">College · Year 2</option>
+              <option value="college-3">College · Year 3</option>
+              <option value="college-4">College · Year 4</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Password</label>
+            <input type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password">
+          </div>
+          <div class="field-group">
+            <label>Confirm password</label>
+            <input type="password" id="signup-confirm" placeholder="••••••••" autocomplete="new-password">
+          </div>
+
+          <div id="signup-error" class="form-error hidden"></div>
+          <div id="signup-success" class="form-success hidden"></div>
+
+          <button class="btn-primary" onclick="handleSignup()">Create account →</button>
+
+          <p class="form-switch">Already have an account? <a href="#" onclick="switchTab('login')">Sign in</a></p>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="js/auth.js"></script>
+</body>
+</html>
